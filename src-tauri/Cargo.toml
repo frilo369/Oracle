@@ -1,6 +1,6 @@
 [package]
 name = "oracle"
-version = "1.7.0"
+version = "1.8.0"
 edition = "2021"
 build = "build.rs"
 
@@ -24,8 +24,8 @@ flate2 = "1"
 zstd = "0.13"
 xxhash-rust = { version = "0.8", features = ["xxh64"] }
 percent-encoding = "2"
-
-[dev-dependencies]
+semver = "1"
+sha2 = "0.10"
 tempfile = "3"
 
 [profile.dev.package."*"]

@@ -14,11 +14,13 @@ pub struct Desktop {
     pub preview: bool,
     pub isolated: bool,
     pub closing: AtomicBool,
+    pub updater: crate::update::Updater,
     save_gate: Mutex<()>,
 }
 impl Desktop {
     pub fn new(root: PathBuf, preview: bool, isolated: bool) -> Self {
         let (settings, error) = crate::settings::load(&root);
+        let update = crate::update::initial(&root);
         let catalogue: Value =
             serde_json::from_str(include_str!("../../src/ui/guide/mayhem-catalogue.json"))
                 .expect("bundled catalogue");
@@ -29,9 +31,10 @@ impl Desktop {
             preview,
             isolated,
             closing: AtomicBool::new(false),
+            updater: crate::update::Updater::default(),
             save_gate: Mutex::new(()),
             view: Mutex::new(
-                json!({"version":env!("CARGO_PKG_VERSION"),"settings":settings,"champions":champions,"guideTarget":if preview {json!({"id":1,"mode":"mayhem"})} else {Value::Null},"guideCapture":false,"hotkeyContext":false,"leagueConnected":false,"phase":if preview{"Fixture"}else{"Offline"},"shortcutStatus":"waiting","error":error}),
+                json!({"version":env!("CARGO_PKG_VERSION"),"settings":settings,"champions":champions,"update":update,"guideTarget":if preview {json!({"id":1,"mode":"mayhem"})} else {Value::Null},"guideCapture":false,"hotkeyContext":false,"leagueConnected":false,"phase":if preview{"Fixture"}else{"Offline"},"shortcutStatus":"waiting","error":error}),
             ),
         }
     }
@@ -179,6 +182,7 @@ fn dashboard_snapshot(view: &Value, compact: bool) -> Value {
         "shortcutStatus",
         "detectedChampion",
         "error",
+        "update",
     ] {
         snapshot[key] = view[key].clone();
     }
@@ -220,6 +224,7 @@ fn compact_refresh_omits_static_catalogue_and_retired_preferences() {
 pub async fn action(app: AppHandle, kind: String, id: Value) -> Result<Value, String> {
     let state = app.state::<Desktop>();
     match kind.as_str() {
+        "check-updates" => crate::update::request(app.clone()),
         "capture" => {
             state.view.lock().map_err(|_| "State unavailable")?["guideCapture"] = json!(id == true);
         }
@@ -322,6 +327,9 @@ pub async fn action(app: AppHandle, kind: String, id: Value) -> Result<Value, St
         "fixture" => {
             if !state.preview {
                 return Err("Fixture mode is disabled".into());
+            }
+            if let Some(scenario) = id["updateScenario"].as_str() {
+                crate::update::fixture(&state, scenario)?;
             }
             if let Some(target) = id.get("target") {
                 state.view.lock().unwrap()["guideTarget"] = target.clone();

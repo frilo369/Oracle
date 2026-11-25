@@ -14,6 +14,7 @@ mod settings;
 mod shell;
 mod support;
 mod switcher;
+mod update;
 
 use tauri::{
     menu::{Menu, MenuItem},
@@ -130,6 +131,7 @@ fn main() {
             }
             league::watch(app.handle().clone());
             switcher::watch(app.handle().clone());
+            update::startup(app.handle().clone());
             Ok(())
         })
         .build(context);

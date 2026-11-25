@@ -3,13 +3,19 @@ import {captureController,revisionGate,mergeSnapshot,refreshController} from './
 const $=s=>document.querySelector(s);
 const invoke=(kind,id=null)=>window.__TAURI__.core.invoke('action',{kind,id});
 const modes={rift:'Summoner’s Rift',aram:'ARAM',arena:'Arena',mayhem:'ARAM: Mayhem'};
-let state,chosen=103,lastShortcut='F1',toastTimer,mutation=Promise.resolve(),keySaving=false,appliedColour;
+let state,chosen=103,lastShortcut='F1',toastTimer,mutation=Promise.resolve(),keySaving=false,appliedColour,latestUpdate;
 const revisions=revisionGate(),failedPortraits=new Set();
 const recording=captureController(on=>invoke('capture',on),()=>{if(state)paint();});
 const champions=()=>state?.champions||[];
 function toast(message){$('#toast').textContent=String(message);$('#toast').hidden=false;clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('#toast').hidden=true,3200);}
 function error(e){toast(e?.message||e);}
+function paintUpdate(update){
+  if(!update||latestUpdate&&update.revision<latestUpdate.revision)return;
+  if(latestUpdate&&JSON.stringify(update)===JSON.stringify(latestUpdate))return;
+  latestUpdate=update;$('#update-status').textContent=update.message;$('#check-updates').disabled=update.busy;$('#check-updates').textContent=update.busy?'Updating…':'Check for updates';
+}
 function paint(){
+  paintUpdate(state.update);
   const capturing=recording.active;
   const settings=state.settings,target=state.guideTarget,champion=champions().find(c=>c.id===target?.id);
   if(appliedColour!==settings.assetColour){window.UmbraAppearance?.apply('umbra',settings.assetColour);appliedColour=settings.assetColour;}
@@ -55,6 +61,8 @@ async function init(){
   $('#accent-colour').addEventListener('input',e=>window.UmbraAppearance?.apply('umbra',e.target.value));$('#accent-colour').addEventListener('change',e=>change({assetColour:e.target.value}).catch(e=>{appliedColour=undefined;paint();error(e);}));$('#reset-colour').addEventListener('click',()=>change({assetColour:'#ae1236'}).catch(error));
   $('#dismiss-error').addEventListener('click',()=>invoke('dismiss-error').then(v=>{state.error=v.error;paint();}).catch(error));$('#match-icon').addEventListener('error',()=>{const icon=$('#match-icon');if(!icon.src.endsWith('/oracle.png')){failedPortraits.add(icon.getAttribute('src'));icon.src='oracle.png';}});
   await window.__TAURI__.event.listen('oracle-error',({payload})=>error(payload));
+  await window.__TAURI__.event.listen('oracle-update',({payload})=>paintUpdate(payload));
+  $('#check-updates').addEventListener('click',async()=>{const button=$('#check-updates');button.disabled=true;try{paintUpdate((await invoke('check-updates')).update);}catch(e){button.disabled=false;error(e);}});
   const refresh=refreshController(async()=>{
     try{const revision=revisions.snapshot();if(revisions.accepts(revision)){const snapshot=await window.__TAURI__.core.invoke('ready',{compact:true});if(revisions.accepts(revision)){const next=mergeSnapshot(state,snapshot);if(next!==state){state=next;paint();}}}}catch(e){error(e);}
   });

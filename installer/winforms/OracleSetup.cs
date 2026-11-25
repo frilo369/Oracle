@@ -104,8 +104,7 @@ namespace Oracle.Installer
             return silent ? RunSilent(options) : RunInteractive(options);
         }
 #else
-        // The same switches as the NSIS setup, so the updater (update.rs) and
-        // scripts/check-installer.ps1 work unchanged.
+        // The native updater hands this verified installer its PID, then exits.
         static int RunSetup()
         {
             Options options = new Options();
@@ -177,14 +176,21 @@ namespace Oracle.Installer
                     try { log.WriteLine(line); } catch (Exception) { }
                 }
             };
+            int exitCode = 1;
+            bool restartUpdate = false;
             try
             {
+                if (options.Mode == SetupMode.Update)
+                {
+                    WaitForUpdateParent(options);
+                    restartUpdate = true;
+                }
                 write("Oracle Setup " + BuildInfo.Version + ": " + mode + (options.Fixture ? " (verification)" : ""));
                 using (Session session = new Session(options))
                 {
-                    int code = session.Run(mode, false, write);
-                    write("Exit code " + code);
-                    return code;
+                    exitCode = session.Run(mode, false, write);
+                    write("Exit code " + exitCode);
+                    return exitCode;
                 }
             }
             catch (Exception ex)
@@ -194,11 +200,58 @@ namespace Oracle.Installer
             }
             finally
             {
+                if (restartUpdate) FinishUpdate(options, exitCode, write);
                 lock (gate)
                 {
                     if (log != null) { log.Dispose(); log = null; }
                 }
             }
+        }
+
+        static void WaitForUpdateParent(Options options)
+        {
+            string expected = Path.GetFullPath(Path.Combine(options.Root, @"bin\oracle.exe"));
+            Process parent;
+            try { parent = Process.GetProcessById(options.WaitPid); }
+            catch (ArgumentException) { return; } // Oracle exited before setup initialized.
+            using (parent)
+            {
+                try
+                {
+                    if (!string.Equals(Path.GetFullPath(parent.MainModule.FileName), expected, StringComparison.OrdinalIgnoreCase))
+                        throw new IOException("The update parent is not the installed Oracle.");
+                }
+                catch (InvalidOperationException) { if (parent.HasExited) return; throw; }
+                catch (Win32Exception) { if (parent.HasExited) return; throw; }
+                if (!parent.WaitForExit(30000)) throw new IOException("Oracle did not exit for the update; nothing was changed.");
+            }
+        }
+
+        static void FinishUpdate(Options options, int code, Action<string> write)
+        {
+            try
+            {
+                string profile = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "com.frilo369.oracle");
+                if (options.Fixture)
+                {
+                    profile = Environment.GetEnvironmentVariable("ORACLE_DATA_DIR");
+                    string allowed = Path.GetFullPath(Path.GetDirectoryName(options.Root)) + Path.DirectorySeparatorChar;
+                    if (string.IsNullOrEmpty(profile) || !Path.GetFullPath(profile).StartsWith(allowed, StringComparison.OrdinalIgnoreCase))
+                        throw new IOException("The fixture restart needs its disposable profile.");
+                }
+                SetupEngine.CheckPath(profile); Directory.CreateDirectory(profile);
+                string result = new JavaScriptSerializer().Serialize(new { ok = code == 0, version = BuildInfo.Version });
+                File.WriteAllText(Path.Combine(profile, "update-result.json"), result, new UTF8Encoding(false));
+                string exe = Path.Combine(options.Root, @"bin\oracle.exe");
+                if (!File.Exists(exe)) throw new IOException("The app is unavailable after setup. See the setup log before retrying.");
+                ProcessStartInfo info = new ProcessStartInfo(exe, (options.Fixture ? "--fixture " : "") + "--tray --skip-update-once");
+                info.UseShellExecute = false; info.CreateNoWindow = true;
+                using (Process restarted = Process.Start(info))
+                {
+                    if (options.Fixture) File.WriteAllText(Path.Combine(options.Root, "update-restart.json"), new JavaScriptSerializer().Serialize(new { ok = code == 0, pid = restarted.Id, exe = exe }));
+                }
+            }
+            catch (Exception ex) { write("##error Could not restart Oracle: " + ex.Message); }
         }
     }
 
