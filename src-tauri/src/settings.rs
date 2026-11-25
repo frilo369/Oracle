@@ -193,6 +193,7 @@ fn startup_removal_only_owns_this_executable() {
 fn settings_validate_and_replace_atomically() {
     let dir = tempfile::tempdir().unwrap();
     let mut value = defaults();
+    assert_eq!(value["overlayEnabled"], false);
     assert!(valid("guideHotkey", &json!("Ctrl+Shift+KeyG")));
     assert!(!valid("guideHotkey", &json!("Ctrl+Ctrl+F1")));
     assert!(!valid("assetColour", &json!("red; background:url(x)")));
@@ -201,6 +202,13 @@ fn settings_validate_and_replace_atomically() {
     value["guideHotkey"] = json!("F8");
     save(&dir.path().join("settings.json"), &value).unwrap();
     assert_eq!(load(dir.path()).0["guideHotkey"], "F8");
+    value["overlayEnabled"] = json!(true);
+    save(&dir.path().join("settings.json"), &value).unwrap();
+    assert_eq!(
+        load(dir.path()).0["overlayEnabled"],
+        true,
+        "the experimental overlay requires an explicit opt-in, which survives restart"
+    );
     fs::write(dir.path().join("settings.json"), b"broken").unwrap();
     assert!(load(dir.path()).1.is_some());
     assert_eq!(

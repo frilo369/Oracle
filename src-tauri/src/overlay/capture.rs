@@ -41,30 +41,76 @@ pub fn area(hwnd: HWND) -> Option<Area> {
 
 pub struct Scanner {
     engine: OcrEngine,
+    gpu: Option<super::gpu::Capture>,
 }
 impl Scanner {
+    pub fn pause(&mut self) {
+        self.gpu = None;
+    }
     pub fn new() -> Result<Self, String> {
         let language = Language::CreateLanguage(&HSTRING::from("en-US"))
             .map_err(|_| "English text recognition is unavailable")?;
         let engine = OcrEngine::TryCreateFromLanguage(&language)
             .map_err(|_| "Install English OCR in Windows language options to use the overlay")?;
-        Ok(Self { engine })
+        Ok(Self { engine, gpu: None })
     }
-    pub fn read(&self, hwnd: HWND, expected: Area) -> Result<(Vec<Text>, i32, i32), String> {
+    pub fn read(
+        &mut self,
+        hwnd: HWND,
+        expected: Area,
+        fullscreen: bool,
+        evidence: Option<&std::path::Path>,
+    ) -> Result<(Vec<Text>, i32, i32), String> {
         if unsafe { GetForegroundWindow() } != hwnd || area(hwnd) != Some(expected) {
             return Err("Target changed".into());
         }
-        let factor = (1600.0 / expected.w as f64)
-            .min(1000.0 / expected.h as f64)
+        let factor = (1920.0 / expected.w as f64)
+            .min(1080.0 / expected.h as f64)
             .min(1.0);
         let w = (expected.w as f64 * factor).round() as i32;
         let h = (expected.h as f64 * factor).round() as i32;
-        let bytes = unsafe { grab(expected, w, h) }
-            .ok_or("Screen capture is unavailable in this display mode")?;
+        let bytes = if fullscreen {
+            if self.gpu.as_ref().is_none_or(|g| !g.matches(hwnd, expected)) {
+                self.gpu = Some(super::gpu::Capture::new(hwnd, expected)?);
+            }
+            match self.gpu.as_mut().unwrap().read(expected, w, h) {
+                Ok(bytes) => bytes,
+                Err(error) => {
+                    self.gpu = None;
+                    return Err(error);
+                }
+            }
+        } else {
+            unsafe { grab(expected, w, h) }
+                .ok_or("Screen capture is unavailable in this display mode")?
+        };
         if unsafe { GetForegroundWindow() } != hwnd || area(hwnd) != Some(expected) {
             return Err("Target changed".into());
         }
-        self.recognize(&bytes, w, h)
+        let recognized = self.recognize(&bytes, w, h)?;
+        if fullscreen
+            && recognized
+                .0
+                .iter()
+                .any(|l| super::data::key(&l.text).contains("chooseanaugment"))
+        {
+            if let Some(path) = evidence.filter(|p| !p.exists()) {
+                let mut file = Vec::with_capacity(bytes.len() + 54);
+                file.extend_from_slice(b"BM");
+                file.extend_from_slice(&((bytes.len() + 54) as u32).to_le_bytes());
+                file.extend_from_slice(&[0; 4]);
+                file.extend_from_slice(&54u32.to_le_bytes());
+                file.extend_from_slice(&40u32.to_le_bytes());
+                file.extend_from_slice(&w.to_le_bytes());
+                file.extend_from_slice(&(-h).to_le_bytes());
+                file.extend_from_slice(&1u16.to_le_bytes());
+                file.extend_from_slice(&32u16.to_le_bytes());
+                file.extend_from_slice(&[0; 24]);
+                file.extend_from_slice(&bytes);
+                let _ = std::fs::write(path, file);
+            }
+        }
+        Ok(recognized)
     }
     fn recognize(&self, bytes: &[u8], w: i32, h: i32) -> Result<(Vec<Text>, i32, i32), String> {
         let buffer = CryptographicBuffer::CreateFromByteArray(bytes)
@@ -84,70 +130,48 @@ impl Scanner {
             .map_err(|_| "Text recognition failed")?;
         let mut lines = Vec::new();
         for line in result.Lines().map_err(|_| "Text recognition failed")? {
-            let mut left = f32::MAX;
-            let mut top = f32::MAX;
-            let mut right = 0f32;
-            let mut bottom = 0f32;
             let mut words = Vec::new();
             for word in line.Words().map_err(|_| "Text recognition failed")? {
                 let r = word.BoundingRect().map_err(|_| "Text recognition failed")?;
-                left = left.min(r.X);
-                top = top.min(r.Y);
-                right = right.max(r.X + r.Width);
-                bottom = bottom.max(r.Y + r.Height);
-                words.push((
-                    word.Text()
-                        .map_err(|_| "Text recognition failed")?
-                        .to_string(),
-                    r,
-                ));
-            }
-            if right > left && bottom > top {
-                lines.push(Text {
-                    text: line
+                words.push(Text {
+                    text: word
                         .Text()
                         .map_err(|_| "Text recognition failed")?
                         .to_string(),
-                    x: left,
-                    y: top,
-                    w: right - left,
-                    h: bottom - top,
+                    x: r.X,
+                    y: r.Y,
+                    w: r.Width,
+                    h: r.Height,
                 });
             }
-            // OCR may group all three card titles into one line. Keep bounded word
-            // phrases too, so matching never depends on its column segmentation.
-            for start in 0..words.len() {
-                let mut text = String::new();
-                let mut bounds = words[start].1;
-                for end in start..(start + 7).min(words.len()) {
-                    let (word, r) = &words[end];
-                    if end > start
-                        && r.X - (words[end - 1].1.X + words[end - 1].1.Width) > w as f32 * 0.035
-                    {
-                        break;
-                    }
-                    if !text.is_empty() {
-                        text.push(' ');
-                    }
-                    text.push_str(word);
-                    let right = (bounds.X + bounds.Width).max(r.X + r.Width);
-                    let bottom = (bounds.Y + bounds.Height).max(r.Y + r.Height);
-                    bounds.X = bounds.X.min(r.X);
-                    bounds.Y = bounds.Y.min(r.Y);
-                    bounds.Width = right - bounds.X;
-                    bounds.Height = bottom - bounds.Y;
-                    lines.push(Text {
-                        text: text.clone(),
-                        x: bounds.X,
-                        y: bounds.Y,
-                        w: bounds.Width,
-                        h: bounds.Height,
-                    });
-                }
-            }
+            lines.extend(text_blocks(words, w as f32));
         }
         Ok((lines, w, h))
     }
+}
+
+// OCR sometimes merges columns. Split only at substantial spatial gaps,
+// never into suffixes: damaged "Ultimate Recursion" must not become "Recursion".
+fn text_blocks(words: Vec<Text>, width: f32) -> Vec<Text> {
+    let mut blocks: Vec<Text> = Vec::new();
+    for word in words {
+        if let Some(last) = blocks
+            .last_mut()
+            .filter(|last| word.x - last.x - last.w <= width * 0.035)
+        {
+            let right = (last.x + last.w).max(word.x + word.w);
+            let bottom = (last.y + last.h).max(word.y + word.h);
+            last.x = last.x.min(word.x);
+            last.y = last.y.min(word.y);
+            last.w = right - last.x;
+            last.h = bottom - last.y;
+            last.text.push(' ');
+            last.text.push_str(&word.text);
+        } else {
+            blocks.push(word);
+        }
+    }
+    blocks
 }
 
 unsafe fn grab(area: Area, w: i32, h: i32) -> Option<Vec<u8>> {
@@ -206,6 +230,34 @@ unsafe fn grab(area: Area, w: i32, h: i32) -> Option<Vec<u8>> {
 #[cfg(test)]
 mod tests {
     #[test]
+    fn merged_columns_split_without_exposing_title_fragments() {
+        let words = [
+            ("Ultilnatc", 100., 80.),
+            ("Recursion", 190., 90.),
+            ("ADAPt", 440., 60.),
+            ("Twin", 740., 45.),
+            ("Fire", 795., 35.),
+        ]
+        .map(|(text, x, w)| super::Text {
+            text: text.into(),
+            x,
+            y: 220.,
+            w,
+            h: 25.,
+        })
+        .to_vec();
+        let lines = super::text_blocks(words, 1000.);
+        assert_eq!(
+            lines.iter().map(|l| l.text.as_str()).collect::<Vec<_>>(),
+            ["Ultilnatc Recursion", "ADAPt", "Twin Fire"]
+        );
+        let c = crate::overlay::data::Catalogue::bundled();
+        assert!(
+            c.resolve(&lines[0].text, true).is_none(),
+            "an unreadable prefix must not silently become Recursion"
+        );
+    }
+    #[test]
     #[ignore = "Explicit local Windows OCR acceptance against an owned preview bitmap"]
     fn real_windows_ocr_reads_owned_preview() {
         let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -227,7 +279,7 @@ mod tests {
         let width = i32::from_le_bytes(bytes[18..22].try_into().unwrap());
         let height = i32::from_le_bytes(bytes[22..26].try_into().unwrap());
         let bits = u16::from_le_bytes(bytes[28..30].try_into().unwrap()) as usize;
-        assert!((640..=1600).contains(&width) && (400..=1000).contains(&height.abs()));
+        assert!((640..=1920).contains(&width) && (400..=1080).contains(&height.abs()));
         assert!(bits == 24 || bits == 32);
         assert_eq!(u32::from_le_bytes(bytes[30..34].try_into().unwrap()), 0);
         let stride = (width as usize * bits).div_ceil(32) * 4;
@@ -258,8 +310,26 @@ mod tests {
             w as f32,
             h as f32,
         )
-        .expect("The real preview's titles and prompt must be recognized");
-        assert_eq!(found.map(|c| c.id), [3055, 1205, 1415]);
+        .unwrap_or_else(|| {
+            panic!(
+                "Owned preview recognition failed: {:?}",
+                lines
+                    .iter()
+                    .filter(|l| l.y > h as f32 * 0.3 && l.y < h as f32 * 0.5)
+                    .map(|l| &l.text)
+                    .collect::<Vec<_>>()
+            )
+        });
+        assert_eq!(
+            found.map(|c| c.id),
+            [3055, 1205, 1415],
+            "Owned fixture titles: {:?}",
+            lines
+                .iter()
+                .filter(|l| l.y > h as f32 * 0.3 && l.y < h as f32 * 0.5)
+                .map(|l| &l.text)
+                .collect::<Vec<_>>()
+        );
         drop(scanner);
         unsafe {
             windows::Win32::System::WinRT::RoUninitialize();

@@ -26,7 +26,16 @@ pub fn detect(
     }
     let prompt = lines.iter().any(|l| {
         let s = key(&l.text);
-        s.contains("chooseanaugment") || s.contains("selectanaugment")
+        [
+            "chooseanaugment",
+            "selectanaugment",
+            "chooseyouraugment",
+            "selectyouraugment",
+            "chooseaugment",
+            "selectaugment",
+        ]
+        .iter()
+        .any(|p| s.contains(p))
     });
     if !prompt {
         return None;
@@ -45,8 +54,8 @@ pub fn detect(
         return None;
     }
     for line in &titles {
-        if let Some(id) = catalogue.names.get(&key(&line.text)) {
-            candidates.push((*id, (*line).clone()));
+        if let Some(id) = catalogue.resolve(&line.text, line.h >= height * 0.018) {
+            candidates.push((id, (*line).clone()));
         }
         // Titles can wrap, but do not combine unrelated columns or distant body text.
         for next in &titles {
@@ -54,12 +63,12 @@ pub fn detect(
                 && next.y < line.y + line.h * 2.4
                 && (next.x + next.w / 2.0 - line.x - line.w / 2.0).abs() < width * 0.05
             {
-                if let Some(id) = catalogue
-                    .names
-                    .get(&key(&format!("{} {}", line.text, next.text)))
-                {
+                if let Some(id) = catalogue.resolve(
+                    &format!("{} {}", line.text, next.text),
+                    line.h >= height * 0.018,
+                ) {
                     candidates.push((
-                        *id,
+                        id,
                         Text {
                             text: format!("{} {}", line.text, next.text),
                             x: line.x.min(next.x),
@@ -112,8 +121,10 @@ pub fn detect(
                     || a.0 == c.0
                     || ax < width * 0.1
                     || cx > width * 0.9
-                    || bx - ax < width * 0.17
-                    || cx - bx < width * 0.17
+                    || bx - ax < width * 0.09
+                    || cx - bx < width * 0.09
+                    || (bx - ax) / (cx - bx) > 1.35
+                    || (cx - bx) / (bx - ax) > 1.35
                     || (a.1.y - b.1.y).abs() > height * 0.045
                     || (a.1.y - c.1.y).abs() > height * 0.045
                 {

@@ -143,7 +143,7 @@ fn metasrc_script(options: &serde_json::Value) -> Result<String, String> {
         .ok_or("the MetaSRC factory function is not closed")?;
     let factory = &source[start + "const metasrcGuide = ".len()..close + 1];
     Ok(format!(
-        "if(location.hostname==='www.metasrc.com'){{({factory})().install({options});}}"
+        "if(location.hostname==='www.metasrc.com'){{globalThis.__oracleGuide=({factory})().install({options});}}"
     ))
 }
 const USED_MARKER: &str = "guide-used";
@@ -431,6 +431,71 @@ static PREWARM_RETRY: Mutex<Option<std::time::Instant>> = Mutex::new(None);
 
 /// Prepares the current match's guide hidden during the loading screen, so the first F1 shows it
 /// at once. Only for players who have used a guide before and have a guide key.
+pub(crate) fn arena_overlay_data(app: &AppHandle, id: u64) -> Result<serde_json::Value, String> {
+    let state = app.state::<Desktop>();
+    if state.isolated {
+        return Err("Live Arena data is disabled in isolated QA".into());
+    }
+    let champions = state.view.lock().map_err(|_| "State unavailable")?["champions"].clone();
+    let expected = metasrc_url("arena", id, &champions)?;
+    let w = {
+        let _opening = OPENING.lock().map_err(|_| "Guide unavailable")?;
+        if state.is_closing() {
+            return Err("Oracle is closing".into());
+        }
+        let valid = state.view.lock().is_ok_and(|v| {
+            v["settings"]["overlayEnabled"] == true
+                && match_target(&v) == Some((id, "arena".into()))
+        });
+        if !valid {
+            return Err("Arena match changed".into());
+        }
+        let existing = app.get_webview_window("meta-guide");
+        if existing
+            .as_ref()
+            .is_some_and(|w| w.is_visible().unwrap_or(false))
+            && !holds("meta-guide", id, "arena")
+        {
+            return Err("Another guide is open; Arena data preparation is waiting".into());
+        }
+        load(app, id, "arena", &champions)?
+    };
+    let script = format!(
+        r#"(()=>{{if(location.origin!=='https://www.metasrc.com'||location.pathname!=={})return null;const snapshot=globalThis.__oracleGuide?.overlaySnapshot?.();const rows=snapshot?.url===location.href?snapshot.rows:[];return {{championId:{id},mode:'arena',rows,verification:/just a moment|verify you are human|security verification/i.test(document.body?.innerText||'')}}}})()"#,
+        json!(expected.path())
+    );
+    let (send, receive) = std::sync::mpsc::sync_channel(1);
+    w.with_webview(move |wv| unsafe {
+        let Ok(core) = wv.controller().CoreWebView2() else {
+            return;
+        };
+        let _ = core.ExecuteScript(
+            &windows::core::HSTRING::from(script),
+            &webview2_com::ExecuteScriptCompletedHandler::create(Box::new(move |result, text| {
+                let value = result
+                    .map(|_| text.to_string())
+                    .ok()
+                    .filter(|s| s.len() < 256_000)
+                    .and_then(|s| serde_json::from_str::<serde_json::Value>(&s).ok());
+                let _ = send.try_send(value);
+                Ok(())
+            })),
+        );
+    })
+    .map_err(|_| "Arena guide could not be read")?;
+    let value = receive
+        .recv_timeout(std::time::Duration::from_secs(2))
+        .ok()
+        .flatten()
+        .ok_or("Arena guide is loading")?;
+    if value["verification"] == true {
+        return Err("Open the Arena guide once to complete MetaSRC's human verification".into());
+    }
+    if value["championId"] != id || value["rows"].as_array().is_none_or(Vec::is_empty) {
+        return Err("Arena statistics are loading".into());
+    }
+    Ok(value)
+}
 fn prewarm(app: &AppHandle, view: &serde_json::Value) {
     let target = match_target(view);
     {
@@ -653,7 +718,7 @@ pub(crate) fn open_from_shortcut(app: &AppHandle) {
 fn the_metasrc_initialization_script_wraps_the_named_factory_once() {
     let script = metasrc_script(&serde_json::json!({"template":"<html></html>"})).unwrap();
     assert!(
-        script.starts_with("if(location.hostname==='www.metasrc.com'){(function metasrcGuide()")
+        script.starts_with("if(location.hostname==='www.metasrc.com'){globalThis.__oracleGuide=(function metasrcGuide()")
     );
     assert!(
         script.ends_with(").install({\"template\":\"<html></html>\"});}"),

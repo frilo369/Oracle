@@ -108,6 +108,7 @@ input[type=color]{width:calc(43 * var(--u));height:calc(33 * var(--u));padding:3
 .guide-controls{display:grid;grid-template-columns:1fr 1fr;gap:calc(24 * var(--u))}
 .control-column{min-width:0}.control-column+.control-column{border-left:1px solid #98734b50;padding-left:calc(24 * var(--u))}
 .guide-controls .setting-row{gap:calc(12 * var(--u))}.guide-controls p{max-width:calc(310 * var(--u))}
+.overlay-links{display:flex;gap:calc(20 * var(--u))}.guide-controls #overlay-status{font-size:calc(13 * var(--u));line-height:1.35;min-height:calc(36 * var(--u))}
 .updates-card .secondary{flex-shrink:0}
 .updates-card p{line-height:1.35}
 .secondary:disabled{opacity:.55}

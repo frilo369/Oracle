@@ -1597,7 +1597,7 @@ const metasrcGuide = function metasrcGuide() {
       earlyStart();
       doc.addEventListener('DOMContentLoaded', begin, { once: true });
     } else begin();
-    return { refresh: update };
+    return { refresh: update,overlaySnapshot:()=>model?.mode==='arena'?{url:model.url,patch:model.patch,rows:model.augments.map(a=>({name:a.name,pick:Number.isFinite(a.pickRate)?a.pickRate+'%':'',grade:a.grade||''}))}:null };
   }
   return {
     sourceURL,

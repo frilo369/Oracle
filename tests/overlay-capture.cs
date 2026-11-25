@@ -1,4 +1,4 @@
-// Captures only the foreground, owned Oracle preview, including its native labels.
+// Captures only a foreground owned Oracle preview or exclusive-fullscreen fixture.
 using System;
 using System.Drawing;
 using System.Drawing.Imaging;
@@ -25,8 +25,11 @@ class OverlayCapture {
         SetProcessDpiAwarenessContext(new IntPtr(-4));
         var h=new IntPtr(long.Parse(args[0]));uint pid;GetWindowThreadProcessId(h,out pid);
         var title=new StringBuilder(200);GetWindowText(h,title,200);
-        if(pid!=uint.Parse(args[1])||GetForegroundWindow()!=h||!title.ToString().StartsWith("Oracle")||!title.ToString().Contains("overlay preview"))throw new Exception("Only the owned foreground Oracle preview may be captured");
-        if(args.Length>3){var overlay=new IntPtr(long.Parse(args[3]));int cloaked;uint color,flags;byte alpha;DwmGetWindowAttribute(overlay,14,out cloaked,4);bool valid=GetLayeredWindowAttributes(overlay,out color,out alpha,out flags);Console.WriteLine("Layered: "+valid+" alpha="+alpha+" key="+color+" flags="+flags+" cloaked="+cloaked+" styles="+GetWindowLong(overlay,-20));}
+        bool gamebar=args.Length>3&&args[3]=="gamebar";
+        bool allowed=title.ToString().StartsWith("Oracle")&&title.ToString().Contains("overlay preview");
+        if(gamebar){string path=System.Diagnostics.Process.GetProcessById((int)pid).MainModule.FileName;allowed=title.ToString()=="Oracle fullscreen overlay test"&&System.IO.Path.GetFileName(path)=="oracle-overlay-fixture.exe"&&path.StartsWith(System.IO.Path.GetFullPath(".test")+"\\",StringComparison.OrdinalIgnoreCase);}
+        if(pid!=uint.Parse(args[1])||GetForegroundWindow()!=h||!allowed)throw new Exception("Only an owned foreground Oracle fixture may be captured");
+        if(args.Length>3&&!gamebar){var overlay=new IntPtr(long.Parse(args[3]));int cloaked;uint color,flags;byte alpha;DwmGetWindowAttribute(overlay,14,out cloaked,4);bool valid=GetLayeredWindowAttributes(overlay,out color,out alpha,out flags);Console.WriteLine("Layered: "+valid+" alpha="+alpha+" key="+color+" flags="+flags+" cloaked="+cloaked+" styles="+GetWindowLong(overlay,-20));}
         System.Threading.Thread.Sleep(150);DwmFlush();
         if(GetForegroundWindow()!=h)throw new Exception("Preview lost foreground before capture");
         Rect r;Point p=new Point();if(!GetClientRect(h,out r)||!ClientToScreen(h,ref p))return 1;
@@ -35,6 +38,7 @@ class OverlayCapture {
             try{if(!BitBlt(dest,0,0,r.Right,r.Bottom,source,p.X,p.Y,0x40CC0020))throw new Exception("Capture failed");}
             finally{graphics.ReleaseHdc(dest);ReleaseDC(IntPtr.Zero,source);}
             image.Save(args[2],ImageFormat.Png);
+            if(gamebar)return 0;
             var bits=image.LockBits(new Rectangle(0,0,image.Width,image.Height),ImageLockMode.ReadOnly,PixelFormat.Format32bppArgb);
             try{
                 var bytes=new byte[bits.Stride*image.Height];Marshal.Copy(bits.Scan0,bytes,0,bytes.Length);int painted=0;

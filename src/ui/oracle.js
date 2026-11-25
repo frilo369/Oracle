@@ -31,7 +31,7 @@ function paint(){
   $('#live-mark').hidden=!champion;$('#open-current').disabled=!target;
   $('#start-windows').checked=settings.startWithWindows;$('#launch-tray').checked=settings.launchInTray;$('#enable-key').checked=!!settings.guideHotkey;
   $('#enable-overlay').checked=!!settings.overlayEnabled;
-  $('#overlay-status').textContent=state.overlay?.status==='unavailable'||state.overlay?.visible?state.overlay.message:'Mayhem · Borderless · English names';
+  $('#overlay-status').textContent=state.overlay?.message||'Experimental · Disabled by default';
   if(document.activeElement!==$('#accent-colour'))$('#accent-colour').value=settings.assetColour;
   $('#app-error').hidden=!state.error;$('#app-error span').textContent=state.error||'';
 }
@@ -61,6 +61,7 @@ async function init(){
   window.addEventListener('blur',()=>capture(false).catch(error));
   for(const [id,key]of [['start-windows','startWithWindows'],['launch-tray','launchInTray'],['enable-overlay','overlayEnabled']])$('#'+id).addEventListener('change',e=>change({[key]:e.target.checked}).catch(e=>{paint();error(e);}));
   $('#preview-overlay').addEventListener('click',async()=>{const button=$('#preview-overlay');button.disabled=true;try{await invoke('overlay-preview');}catch(e){error(e);}finally{button.disabled=false;}});
+  $('#setup-overlay').addEventListener('click',()=>invoke('gamebar-setup').catch(error));
   $('#accent-colour').addEventListener('input',e=>window.UmbraAppearance?.apply('umbra',e.target.value));$('#accent-colour').addEventListener('change',e=>change({assetColour:e.target.value}).catch(e=>{appliedColour=undefined;paint();error(e);}));$('#reset-colour').addEventListener('click',()=>change({assetColour:'#ae1236'}).catch(error));
   $('#dismiss-error').addEventListener('click',()=>invoke('dismiss-error').then(v=>{state.error=v.error;paint();}).catch(error));$('#match-icon').addEventListener('error',()=>{const icon=$('#match-icon');if(!icon.src.endsWith('/oracle-portrait.svg')){failedPortraits.add(icon.getAttribute('src'));icon.src='oracle-portrait.svg';}});
   await window.__TAURI__.event.listen('oracle-error',({payload})=>error(payload));

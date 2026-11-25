@@ -31,8 +31,8 @@ const watchdog=setTimeout(()=>child?.kill(),180000);watchdog.unref();
 try{
   const captureExe=join(output,'capture.exe');
   await run(join(process.env.WINDIR,'Microsoft.NET/Framework64/v4.0.30319/csc.exe'),['/nologo','/r:System.Drawing.dll',`/out:${captureExe}`,join(root,'tests/overlay-capture.cs')]);
-  await launch();await until(async()=>(await ready()).overlay?.status==='idle');
-  assert.equal((await ready()).settings.overlayEnabled,false,'overlay must be opt-in');
+  await launch();await until(async()=>['idle','setup'].includes((await ready()).overlay?.status));
+  assert.equal((await ready()).settings.overlayEnabled,false,'experimental overlay defaults off until explicitly enabled');
   await page.locator('nav [data-tab="settings"]').click();await page.locator('#enable-overlay').check();await until(async()=>(await ready()).settings.overlayEnabled===true);
   await page.screenshot({path:join(output,'settings.png')});
   const start=Date.now();await page.locator('#preview-overlay').click();
@@ -73,7 +73,7 @@ try{
   // A validated QA profile must never capture real League, even with this setting on.
   await action('fixture',{target:{id:1,mode:'mayhem'}});await delay(800);assert.equal((await ready()).overlay.target,null);
   await stop();await launch();assert.equal((await ready()).settings.overlayEnabled,true,'setting survives restart');
-  await until(async()=>(await ready()).overlay?.status==='idle');assert.equal((await ready()).overlay.target,null);
+  await until(async()=>['idle','setup'].includes((await ready()).overlay?.status));assert.equal((await ready()).overlay.target,null);
   await page.locator('nav [data-tab="settings"]').click();await page.locator('#enable-overlay').uncheck();await until(async()=>(await ready()).settings.overlayEnabled===false);
   assert.deepEqual(errors,[]);
   await writeFile(join(output,'verified.json'),JSON.stringify({observations,settingPersists:true,qaCaptureIsolated:true,errors},null,2));

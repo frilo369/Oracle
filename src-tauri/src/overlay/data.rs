@@ -10,9 +10,70 @@ pub fn key(text: &str) -> String {
 
 pub struct Catalogue {
     pub names: HashMap<String, u64>,
+    ocr_names: HashMap<String, u64>,
+}
+fn ocr_key(s: &str) -> String {
+    key(s)
+        .replace("rn", "m")
+        .replace("vv", "w")
+        .replace("iv", "w")
+        .replace("tw", "w")
+}
+fn one_away(a: &[u8], b: &[u8]) -> bool {
+    if a.len().abs_diff(b.len()) > 1 {
+        return false;
+    }
+    let (mut i, mut j, mut edits) = (0, 0, 0);
+    while i < a.len() && j < b.len() {
+        if a[i] == b[j] {
+            i += 1;
+            j += 1;
+        } else {
+            edits += 1;
+            if edits > 1 {
+                return false;
+            }
+            if a.len() >= b.len() {
+                i += 1;
+            }
+            if b.len() >= a.len() {
+                j += 1;
+            }
+        }
+    }
+    edits + (i < a.len() || j < b.len()) as usize <= 1
 }
 impl Catalogue {
+    pub fn resolve(&self, text: &str, ocr: bool) -> Option<u64> {
+        let exact = key(text);
+        if let Some(id) = self.names.get(&exact) {
+            return Some(*id);
+        }
+        if !ocr {
+            return None;
+        }
+        let k = ocr_key(text);
+        if let Some(id) = self.ocr_names.get(&k) {
+            return Some(*id);
+        }
+        if !(5..=36).contains(&k.len()) {
+            return None;
+        }
+        let mut found = None;
+        for (name, id) in &self.ocr_names {
+            if one_away(k.as_bytes(), name.as_bytes()) {
+                if found.is_some_and(|old| old != *id) {
+                    return None;
+                }
+                found = Some(*id);
+            }
+        }
+        found
+    }
     pub fn bundled() -> Self {
+        Self::for_mode(false)
+    }
+    pub fn for_mode(arena: bool) -> Self {
         let doc: Value =
             serde_json::from_str(include_str!("../../../src/ui/guide/mayhem-catalogue.json"))
                 .expect("bundled catalogue");
@@ -31,9 +92,10 @@ impl Catalogue {
                     continue;
                 }
                 let priority = u8::from(
-                    row["apiName"]
-                        .as_str()
-                        .is_some_and(|n| n.starts_with("ARAM_")),
+                    arena
+                        != (row["apiName"]
+                            .as_str()
+                            .is_some_and(|n| n.starts_with("ARAM_"))),
                 );
                 names
                     .entry(k)
@@ -47,11 +109,23 @@ impl Catalogue {
                     .or_insert((priority, id));
             }
         }
-        let names = names
+        let names: HashMap<String, u64> = names
             .into_iter()
             .filter_map(|(name, (_, id))| (id != 0).then_some((name, id)))
             .collect();
-        Self { names }
+        let mut ocr_names = HashMap::new();
+        for (name, id) in &names {
+            ocr_names
+                .entry(ocr_key(name))
+                .and_modify(|old| {
+                    if *old != *id {
+                        *old = 0
+                    }
+                })
+                .or_insert(*id);
+        }
+        ocr_names.retain(|_, id| *id != 0);
+        Self { names, ocr_names }
     }
 }
 
@@ -66,6 +140,47 @@ pub struct Stats {
     pub stale: bool,
 }
 impl Stats {
+    pub fn arena(response: &Value, champion: u64, catalogue: &Catalogue) -> Result<Self, String> {
+        if response["championId"].as_u64() != Some(champion) || response["mode"] != "arena" {
+            return Err("Arena statistics have a different identity".into());
+        }
+        let mut rows = HashMap::new();
+        for row in response["rows"]
+            .as_array()
+            .ok_or("Missing Arena statistics")?
+            .iter()
+            .take(1000)
+        {
+            let Some(id) = row["name"]
+                .as_str()
+                .and_then(|name| catalogue.names.get(&key(name)))
+            else {
+                continue;
+            };
+            let pick = row["pick"]
+                .as_str()
+                .and_then(|s| s.trim().strip_suffix('%'))
+                .and_then(|s| s.parse::<f64>().ok())
+                .filter(|n| n.is_finite() && (0.0..=100.0).contains(n));
+            let grade = row["grade"]
+                .as_str()
+                .filter(|s| {
+                    matches!(
+                        *s,
+                        "S+" | "S" | "A+" | "A" | "B+" | "B" | "C+" | "C" | "D+" | "D" | "F"
+                    )
+                })
+                .unwrap_or("")
+                .to_string();
+            if pick.is_some() || !grade.is_empty() {
+                rows.insert(*id, Stat { pick, grade });
+            }
+        }
+        if rows.is_empty() {
+            return Err("Arena statistics are loading".into());
+        }
+        Ok(Self { rows, stale: false })
+    }
     pub fn parse(response: &Value, champion: u64) -> Result<Self, String> {
         if response["championId"].as_u64() != Some(champion) {
             return Err("Different champion".into());
@@ -145,6 +260,20 @@ mod tests {
         let c = Catalogue::bundled();
         assert_eq!(c.names.get(&key("Ultimate Recursion")), Some(&3055));
         assert_eq!(c.names.get(&key("ADAPT")), Some(&1205));
+        let arena = Catalogue::for_mode(true);
+        assert_eq!(arena.names.get(&key("ADAPT")), Some(&205));
+        assert_eq!(arena.names.get(&key("Recursion")), Some(&68));
+    }
+    #[test]
+    fn arena_statistics_never_reuse_mayhem_percentages() {
+        let fixture: Value =
+            serde_json::from_str(include_str!("../../../tests/fixtures/overlay-arena.json"))
+                .unwrap();
+        let c = Catalogue::for_mode(true);
+        let stats = Stats::arena(&fixture, 1, &c).unwrap();
+        assert_eq!(stats.label(205), "Pick 11.11%   |   Tier S");
+        assert_eq!(stats.label(1205), "Pick —   |   Tier —");
+        assert!(Stats::arena(&fixture, 103, &c).is_err());
     }
     #[test]
     fn unavailable_percentages_and_stale_data_are_explicit() {

@@ -227,6 +227,11 @@ pub async fn action(app: AppHandle, kind: String, id: Value) -> Result<Value, St
     let state = app.state::<Desktop>();
     match kind.as_str() {
         "check-updates" => crate::update::request(app.clone()),
+        "gamebar-setup" => {
+            if !state.isolated {
+                crate::overlay::setup()?;
+            }
+        }
         "overlay-preview" => {
             let handle = app.clone();
             tauri::async_runtime::spawn_blocking(move || crate::overlay::preview(&handle))
@@ -338,6 +343,15 @@ pub async fn action(app: AppHandle, kind: String, id: Value) -> Result<Value, St
             }
             if id["overlayInspect"] == true {
                 return Ok(crate::overlay::inspect(&app));
+            }
+            for key in [
+                "overlayGpuPreview",
+                "overlayFixtureWindow",
+                "overlayFixtureArena",
+            ] {
+                if let Some(value) = id.get(key).filter(|v| v.is_boolean()) {
+                    state.view.lock().unwrap()[key] = value.clone();
+                }
             }
             if let Some(w) = app.get_webview_window("overlay-preview") {
                 if id["closeOverlayPreview"] == true {

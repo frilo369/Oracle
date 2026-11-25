@@ -10,8 +10,8 @@ const pending=[];
 function replaceOnce(source,find,replacement){if(source.split(find).length!==2)throw Error('Reference changed near '+find.slice(0,75)+'; review the Oracle adapter.');return source.replace(find,replacement);}
 // Keep Oracle's audited lifecycle fixes when intentionally refreshing the reference.
 // Exact hunks fail closed when reference code changes, instead of silently losing a fix.
-function auditPatch(source,file){
-  const patch=readFileSync(join(root,'scripts/guide-audit.patch'),'utf8').replaceAll('\r\n','\n');
+function auditPatch(source,file,patchFile='guide-audit.patch'){
+  const patch=readFileSync(join(root,'scripts',patchFile),'utf8').replaceAll('\r\n','\n');
   const section=patch.split('diff --git ').find(s=>s.startsWith(`a/src-tauri/src/${file} b/src-tauri/src/${file}\n`));
   if(!section)return source;
   const formatted=spawnSync('rustfmt',['--edition','2021','--emit','stdout'],{input:source,encoding:'utf8',windowsHide:true});
@@ -102,7 +102,7 @@ fn open_target(app:&AppHandle,id:u64,mode:&str,champions:&serde_json::Value)->Re
         if !shortcut_enabled(app) {`);
     source=replaceOnce(source,'    } else if matches!(current, GuideShortcut::NoMatch) {','    } else if matches!(current, GuideShortcut::NoMatch) {\n        if let Ok(mut view)=state.view.lock(){view["shortcutStatus"]=json!("waiting");}');
   }
-  pending.push([join(root,'src-tauri/src',file),auditPatch(source,file)]);
+  pending.push([join(root,'src-tauri/src',file),auditPatch(auditPatch(source,file),file,'guide-overlay.patch')]);
 }
 if(!process.argv.includes('--check'))for(const [path,source] of pending)writeFileSync(path,source);
 console.log(process.argv.includes('--check')?'Reference adapters validated without writing files.':'Native guide modules synchronized with the reference.');

@@ -1,5 +1,8 @@
 mod capture;
+mod controller;
 mod data;
+mod gamebar;
+mod gpu;
 mod recognition;
 mod window;
 
@@ -19,6 +22,10 @@ use windows_sys::Win32::{
         WS_EX_TRANSPARENT,
     },
 };
+
+pub fn setup() -> Result<(), String> {
+    gamebar::activate()
+}
 
 pub fn preview(app: &AppHandle) -> Result<(), String> {
     if let Some(w) = app.get_webview_window("overlay-preview") {
@@ -67,6 +74,9 @@ struct Target {
     area: Area,
     champion: u64,
     preview: bool,
+    arena: bool,
+    gpu: bool,
+    gamebar: bool,
 }
 struct Scan {
     target: Target,
@@ -86,22 +96,63 @@ fn target(app: &AppHandle) -> Option<Target> {
                 area: capture::area(hwnd)?,
                 champion: 1,
                 preview: true,
+                arena: false,
+                gpu: state.preview && state.view.lock().ok()?["overlayGpuPreview"] == true,
+                gamebar: false,
             });
         }
     }
     if state.isolated {
+        if state.preview {
+            let v = state.view.lock().ok()?;
+            if v["overlayFixtureWindow"] == true {
+                let hwnd = unsafe {
+                    windows_sys::Win32::UI::WindowsAndMessaging::FindWindowW(
+                        std::ptr::null(),
+                        windows_sys::core::w!("Oracle fullscreen overlay test"),
+                    )
+                };
+                let mut pid = 0;
+                unsafe {
+                    windows_sys::Win32::UI::WindowsAndMessaging::GetWindowThreadProcessId(
+                        hwnd, &mut pid,
+                    );
+                }
+                let workspace = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                    .parent()?
+                    .join(".test");
+                if !hwnd.is_null()
+                    && unsafe { GetForegroundWindow() } == hwnd
+                    && crate::switcher::image_path(pid).is_some_and(|p| {
+                        p.starts_with(&workspace)
+                            && p.file_name()
+                                .is_some_and(|n| n == "oracle-overlay-fixture.exe")
+                    })
+                {
+                    return Some(Target {
+                        hwnd: hwnd as usize,
+                        area: capture::area(hwnd)?,
+                        champion: 1,
+                        preview: true,
+                        arena: v["overlayFixtureArena"] == true,
+                        gpu: true,
+                        gamebar: true,
+                    });
+                }
+            }
+        }
         return None;
     }
-    let (enabled, champion, mayhem, phase) = {
+    let (enabled, champion, mode, phase) = {
         let v = state.view.lock().ok()?;
         (
             v["settings"]["overlayEnabled"] == true,
             v["guideTarget"]["id"].as_u64(),
-            v["guideTarget"]["mode"] == "mayhem",
+            v["guideTarget"]["mode"].as_str().map(str::to_owned),
             v["phase"] == "InProgress",
         )
     };
-    if !enabled || !mayhem || !phase {
+    if !enabled || !matches!(mode.as_deref(), Some("mayhem" | "arena")) || !phase {
         return None;
     }
     let hwnd = crate::switcher::game_window();
@@ -113,6 +164,9 @@ fn target(app: &AppHandle) -> Option<Target> {
         area: capture::area(hwnd)?,
         champion: champion?,
         preview: false,
+        arena: mode.as_deref() == Some("arena"),
+        gpu: true,
+        gamebar: true,
     })
 }
 fn status(
@@ -183,239 +237,4 @@ pub fn inspect(app: &AppHandle) -> serde_json::Value {
     }
 }
 
-pub fn watch(app: AppHandle) {
-    std::thread::spawn(move || {
-        let state = app.state::<Desktop>();
-        let catalogue = Catalogue::bundled();
-        let mut surface: Option<window::Overlay> = None;
-        let (jobs, requests) = mpsc::sync_channel::<Target>(1);
-        let (reply, scans) = mpsc::sync_channel::<Scan>(1);
-        std::thread::spawn(move || {
-            let com = unsafe {
-                windows::Win32::System::WinRT::RoInitialize(
-                    windows::Win32::System::WinRT::RO_INIT_MULTITHREADED,
-                )
-            };
-            let mut scanner = None;
-            while let Ok(target) = requests.recv() {
-                let started = Instant::now();
-                let result = if com.is_err() {
-                    Err("Windows text recognition could not start".into())
-                } else {
-                    if scanner.is_none() {
-                        scanner = capture::Scanner::new().ok();
-                    }
-                    match &scanner {
-                        Some(s) => s.read(target.hwnd as HWND, target.area),
-                        None => Err(
-                            "Install English OCR in Windows language options to use the overlay"
-                                .into(),
-                        ),
-                    }
-                };
-                if reply
-                    .send(Scan {
-                        target,
-                        started,
-                        result,
-                    })
-                    .is_err()
-                {
-                    break;
-                }
-            }
-            drop(scanner);
-            if com.is_ok() {
-                unsafe {
-                    windows::Win32::System::WinRT::RoUninitialize();
-                }
-            }
-        });
-        let (send_stats, stats_results) = mpsc::channel::<(u64, bool, Result<Stats, String>)>();
-        let mut current = None;
-        let mut stats = None;
-        let mut fetching = None;
-        let mut next_stats = Instant::now();
-        let mut stats_at = Instant::now();
-        let mut stable = recognition::Stable::default();
-        let mut pending = false;
-        let mut next_scan = Instant::now();
-        let mut expires = Instant::now();
-        let mut labels = Vec::new();
-        let mut failure = None::<String>;
-        let mut stats_failure = None::<String>;
-        while !state.is_closing() {
-            window::Overlay::pump();
-            let now = Instant::now();
-            let wanted = target(&app);
-            if wanted != current {
-                if wanted.map(|t| (t.champion, t.preview))
-                    != current.map(|t: Target| (t.champion, t.preview))
-                {
-                    next_stats = now;
-                    stats_failure = None;
-                }
-                current = wanted;
-                labels.clear();
-                stable.reset();
-                next_scan = now + Duration::from_millis(250);
-                failure = None;
-                if let Some(w) = &surface {
-                    w.hide();
-                }
-            }
-            if let Some(t) = current {
-                if fetching != Some((t.champion, t.preview))
-                    && now >= next_stats
-                    && (stats_at.elapsed() >= Duration::from_secs(3600)
-                        || stats.as_ref().is_none_or(|(id, preview, _)| {
-                            (*id, *preview) != (t.champion, t.preview)
-                        }))
-                {
-                    stats = None;
-                    fetching = Some((t.champion, t.preview));
-                    let root = state.root.clone();
-                    let sender = send_stats.clone();
-                    std::thread::spawn(move || {
-                        let result = crate::guide::read(&root, t.champion, false, t.preview)
-                            .and_then(|r| Stats::parse(&r, t.champion));
-                        let _ = sender.send((t.champion, t.preview, result));
-                    });
-                }
-                if !pending && now >= next_scan {
-                    if jobs.try_send(t).is_ok() {
-                        pending = true;
-                    }
-                    next_scan = now + Duration::from_millis(500);
-                }
-            }
-            while let Ok((id, preview, result)) = stats_results.try_recv() {
-                if fetching == Some((id, preview)) {
-                    fetching = None;
-                }
-                if current.is_some_and(|t| (t.champion, t.preview) == (id, preview)) {
-                    match result {
-                        Ok(data) => {
-                            stats = Some((id, preview, data));
-                            stats_at = now;
-                            stats_failure = None;
-                            next_stats = now;
-                        }
-                        Err(_) => {
-                            stats_failure =
-                                Some("Augment data unavailable · Retrying automatically".into());
-                            next_stats = now + Duration::from_secs(30);
-                        }
-                    }
-                }
-            }
-            while let Ok(scan) = scans.try_recv() {
-                pending = false;
-                if Some(scan.target) != current
-                    || scan.started.elapsed() > Duration::from_secs(1)
-                    || target(&app) != current
-                {
-                    continue;
-                }
-                match scan.result {
-                    Ok((lines, w, h)) => {
-                        if state.preview {
-                            crate::support::event(
-                                &state.root,
-                                "overlay-ocr",
-                                json!({"width":w,"height":h,"matches":lines.iter().filter_map(|l|catalogue.names.get(&data::key(&l.text)).map(|id|json!({"id":id,"x":l.x,"y":l.y,"w":l.w,"h":l.h}))).collect::<Vec<_>>(),"prompt":lines.iter().any(|l|data::key(&l.text).contains("chooseanaugment"))}),
-                            );
-                        }
-                        let found = stable
-                            .accept(recognition::detect(&lines, &catalogue, w as f32, h as f32));
-                        labels.clear();
-                        if let (Some(found), Some((id, preview, data))) = (found, stats.as_ref()) {
-                            if (*id, *preview) == (scan.target.champion, scan.target.preview) {
-                                labels = found
-                                    .iter()
-                                    .map(|c| window::Label {
-                                        id: c.id,
-                                        x: (c.x * scan.target.area.w as f32 / w as f32) as i32,
-                                        y: (c.y * scan.target.area.h as f32 / h as f32) as i32,
-                                        text: data.label(c.id),
-                                    })
-                                    .collect();
-                                expires = now + Duration::from_millis(1100);
-                            }
-                        }
-                        failure = None;
-                    }
-                    Err(message) => {
-                        labels.clear();
-                        stable.reset();
-                        failure = Some(message);
-                    }
-                }
-            }
-            if now > expires {
-                labels.clear();
-            }
-            if target(&app) != current {
-                labels.clear();
-            }
-            if !labels.is_empty() && surface.is_none() {
-                surface = window::Overlay::new();
-                if surface.is_none() {
-                    labels.clear();
-                    failure = Some("Could not create augment overlay".into());
-                }
-            }
-            if let Some(t) = current.filter(|_| !labels.is_empty()) {
-                if target(&app) == Some(t) {
-                    if let Some(w) = surface.as_mut() {
-                        if w.show(t.area, labels.clone()) {
-                            status(
-                                &app,
-                                "visible",
-                                if t.preview {
-                                    "Preview · example Annie statistics"
-                                } else {
-                                    "Showing Mayhem augment pick rates and tiers"
-                                },
-                                &labels,
-                                w.hwnd as usize,
-                                Some(t),
-                            );
-                        } else {
-                            w.hide();
-                            labels.clear();
-                            failure = Some("Could not position augment overlay".into());
-                        }
-                    }
-                }
-            } else {
-                if let Some(w) = &surface {
-                    w.hide();
-                }
-                status(
-                    &app,
-                    if failure.is_some() || stats_failure.is_some() {
-                        "unavailable"
-                    } else {
-                        "idle"
-                    },
-                    failure.as_deref().or(stats_failure.as_deref()).unwrap_or(
-                        if current.is_some() {
-                            "Waiting for three recognizable augment choices"
-                        } else {
-                            "Mayhem · Borderless fullscreen"
-                        },
-                    ),
-                    &[],
-                    surface.as_ref().map_or(0, |w| w.hwnd as usize),
-                    current,
-                );
-            }
-            std::thread::sleep(Duration::from_millis(if current.is_some() {
-                75
-            } else {
-                250
-            }));
-        }
-    });
-}
+pub use controller::watch;
