@@ -35,12 +35,15 @@ try {
     $setupLock=[IO.File]::Open($setupExe,[IO.FileMode]::Open,[IO.FileAccess]::Read,[IO.FileShare]::Read)
     $updater=Start-Isolated $setupExe "/S /VERIFY-UPDATE /WAITPID=$($app.Id)"
     Start-Sleep -Milliseconds 1200
+    $updater.Refresh();if($updater.MainWindowHandle -ne [IntPtr]::Zero){throw 'Silent updater displayed a window'}
     if($updater.HasExited -or (Get-FileHash -LiteralPath $exe).Hash -ne $before){throw 'Update did not wait for its parent'}
     if((Wait-ProcessResult (Start-Isolated $exe '--quit')) -ne 0){throw 'Could not stop fixture parent'}
     if((Wait-ProcessResult $updater) -ne 0){throw 'Fixture update failed'}
     $setupLock.Dispose();$setupLock=$null
     $result=Wait-Restart;$restarted=[Diagnostics.Process]::GetProcessById($result.pid)
     if(!$result.ok -or $restarted.HasExited){throw 'Successful update did not restart Oracle'}
+    Start-Sleep -Milliseconds 500
+    if(Test-Path -LiteralPath (Join-Path $profile 'Dashboard-WebView2')){throw 'Quiet update restart created a dashboard WebView'}
     $expected=(Get-FileHash -LiteralPath (Join-Path $root 'target/release/oracle.exe')).Hash
     if((Get-FileHash -LiteralPath $exe).Hash -ne $expected){throw 'Updated app checksum mismatch'}
     if((Get-FileHash -LiteralPath $settings).Hash -ne $settingsHash -or [IO.File]::ReadAllText((Join-Path $fixture 'bin/custom.txt')) -ne 'keep update extras'){throw 'Update damaged preferences or extra files'}

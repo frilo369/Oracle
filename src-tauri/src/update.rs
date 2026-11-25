@@ -192,8 +192,16 @@ fn verify_download(
 }
 
 fn installed(exe: &Path, local: &Path) -> bool {
-    exe.to_string_lossy()
-        .eq_ignore_ascii_case(&local.join("oracle/bin/oracle.exe").to_string_lossy())
+    // Windows paths may contain either separator, different casing, or a verbatim
+    // prefix. Comparing their display strings misclassified real installed copies.
+    let expected = local.join("oracle").join("bin").join("oracle.exe");
+    let exe = exe.canonicalize().unwrap_or_else(|_| exe.to_path_buf());
+    let expected = expected.canonicalize().unwrap_or(expected);
+    exe.components()
+        .map(|part| part.as_os_str().to_string_lossy().to_ascii_lowercase())
+        .eq(expected
+            .components()
+            .map(|part| part.as_os_str().to_string_lossy().to_ascii_lowercase()))
 }
 
 fn safe_to_install(view: &Value, game_running: bool) -> bool {
@@ -558,8 +566,29 @@ mod tests {
             assert!(!safe_to_install(&busy, false));
         }
         let root = Path::new(r"C:\Users\fixture\AppData\Local");
+        assert!(installed(
+            Path::new(r"C:\Users\fixture\AppData\Local\oracle\bin\oracle.exe"),
+            root
+        ));
+        assert!(installed(
+            Path::new("c:/users/FIXTURE/appdata/local/ORACLE/bin/Oracle.EXE"),
+            root
+        ));
         assert!(installed(&root.join("oracle/bin/oracle.exe"), root));
         assert!(!installed(Path::new(r"C:\portable\Oracle.exe"), root));
+        assert!(!installed(&root.join("oracle-copy/bin/oracle.exe"), root));
+    }
+
+    #[test]
+    fn installed_detection_matches_real_backslash_and_verbatim_paths() {
+        let root = tempfile::tempdir().unwrap();
+        let bin = root.path().join("oracle").join("bin");
+        fs::create_dir_all(&bin).unwrap();
+        let exe = bin.join("oracle.exe");
+        fs::write(&exe, b"fixture").unwrap();
+        let native = PathBuf::from(exe.to_string_lossy().replace('/', "\\"));
+        assert!(installed(&native, root.path()));
+        assert!(installed(&exe.canonicalize().unwrap(), root.path()));
     }
     #[test]
     fn update_redirects_stay_on_trusted_https_hosts() {

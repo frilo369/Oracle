@@ -2,7 +2,7 @@
 
 A Windows system tray companion for League of Legends. Oracle starts in the tray by default. Click its tray icon to open the control panel. Press **F1** in a supported match for your champion's analytics, or click the shortcut in Overview to change it. Closing the panel keeps Oracle running; choose **Quit Oracle** to exit.
 
-Download the Windows installer from [the latest Oracle release](https://github.com/frilo369/Oracle/releases/latest). Install version 1.8 once to enable automatic updates from that version onward.
+Download the Windows installer from [the latest Oracle release](https://github.com/frilo369/Oracle/releases/latest). Use version 2.0 or later for the corrected automatic updater; 1.8/1.9 could mistake an installed copy for a portable copy.
 
 Oracle checks for updates in the background at startup. **Settings → Check for updates** checks immediately and shows progress or retry messages. A newer stable release downloads and verifies automatically, waits for matches and shortcut recording to finish, then installs and restarts quietly. A failed installation preserves the previous app and restarts it. Portable copies report available versions; automatic installation requires the standard installed copy. Public update checks need no GitHub account or token.
 
@@ -17,5 +17,7 @@ Version 1.7 reduces dashboard refresh data by about 99%, skips unchanged paints 
 Version 1.8 adds automatic startup updates, the Settings update check, verified GitHub downloads and installer wait/restart handling. See `docs/validation-1.8.md` for acceptance results and the release workflow.
 
 Version 1.9 recreates the owner's dashboard reference with gold frames, ruby controls and eclipse/portal artwork. Overview and Settings share the new design. The default window is 1040×780 and scales down to 720×570. `node scripts/check-design.mjs` checks native layouts and controls; see `docs/ui-redesign-1.9.md` for screenshots, artwork provenance and verification.
+
+Version 2.0 fixes Windows installed-path recognition so startup checks and **Check for updates** quietly download, verify, install and restart an installed copy when a newer version is available. No manual setup or download-page step is required for future updates. See `docs/validation-2.0.md`.
 
 Independent project by FrYiLo; not affiliated with Riot Games. League artwork belongs to Riot Games. Provider pages and availability are controlled by their owners. See `docs/ideas.md` for proposed future features and `docs/provenance.md` for reused source.
