@@ -7,7 +7,7 @@ use std::{
 };
 
 pub fn defaults() -> Value {
-    json!({"guideHotkey":"F1","assetColour":"#ae1236","theme":"umbra","launchInTray":true,"trayDefault13":true,"startWithWindows":false,"lastGuide":{"champion":103,"mode":"rift"}})
+    json!({"guideHotkey":"F1","assetColour":"#ae1236","theme":"umbra","launchInTray":true,"trayDefault13":true,"startWithWindows":false,"overlayEnabled":false,"lastGuide":{"champion":103,"mode":"rift"}})
 }
 pub fn valid(key: &str, value: &Value) -> bool {
     match key {
@@ -21,7 +21,9 @@ pub fn valid(key: &str, value: &Value) -> bool {
             s.len() == 7 && s.starts_with('#') && s[1..].bytes().all(|b| b.is_ascii_hexdigit())
         }),
         "theme" => value == "umbra",
-        "launchInTray" | "startWithWindows" | "trayDefault13" => value.is_boolean(),
+        "launchInTray" | "startWithWindows" | "trayDefault13" | "overlayEnabled" => {
+            value.is_boolean()
+        }
         "lastGuide" => value.as_object().is_some_and(|m| {
             m.len() == 2
                 && value["champion"]

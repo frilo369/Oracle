@@ -30,6 +30,8 @@ function paint(){
   const art=champion?.icon&&!failedPortraits.has(champion.icon)?champion.icon:'oracle-portrait.svg';if($('#match-icon').getAttribute('src')!==art)$('#match-icon').src=art;
   $('#live-mark').hidden=!champion;$('#open-current').disabled=!target;
   $('#start-windows').checked=settings.startWithWindows;$('#launch-tray').checked=settings.launchInTray;$('#enable-key').checked=!!settings.guideHotkey;
+  $('#enable-overlay').checked=!!settings.overlayEnabled;
+  $('#overlay-status').textContent=state.overlay?.status==='unavailable'||state.overlay?.visible?state.overlay.message:'Mayhem · Borderless · English names';
   if(document.activeElement!==$('#accent-colour'))$('#accent-colour').value=settings.assetColour;
   $('#app-error').hidden=!state.error;$('#app-error span').textContent=state.error||'';
 }
@@ -57,7 +59,8 @@ async function init(){
   $('#enable-key').addEventListener('change',e=>change({guideHotkey:e.target.checked?lastShortcut:null}).catch(e=>{paint();error(e);}));
   document.addEventListener('keydown',async e=>{if(!recording.active)return;e.preventDefault();e.stopPropagation();if(e.key==='Escape'){await capture(false).catch(error);return;}if(e.repeat||recording.pending||keySaving)return;const binding=shortcutFromEvent(e);if(!binding)return;keySaving=true;try{await change({guideHotkey:binding});await capture(false);toast(`Shortcut saved: ${shortcutLabel(binding)}`);}catch(e){error(e);}finally{keySaving=false;}},true);
   window.addEventListener('blur',()=>capture(false).catch(error));
-  for(const [id,key]of [['start-windows','startWithWindows'],['launch-tray','launchInTray']])$('#'+id).addEventListener('change',e=>change({[key]:e.target.checked}).catch(e=>{paint();error(e);}));
+  for(const [id,key]of [['start-windows','startWithWindows'],['launch-tray','launchInTray'],['enable-overlay','overlayEnabled']])$('#'+id).addEventListener('change',e=>change({[key]:e.target.checked}).catch(e=>{paint();error(e);}));
+  $('#preview-overlay').addEventListener('click',async()=>{const button=$('#preview-overlay');button.disabled=true;try{await invoke('overlay-preview');}catch(e){error(e);}finally{button.disabled=false;}});
   $('#accent-colour').addEventListener('input',e=>window.UmbraAppearance?.apply('umbra',e.target.value));$('#accent-colour').addEventListener('change',e=>change({assetColour:e.target.value}).catch(e=>{appliedColour=undefined;paint();error(e);}));$('#reset-colour').addEventListener('click',()=>change({assetColour:'#ae1236'}).catch(error));
   $('#dismiss-error').addEventListener('click',()=>invoke('dismiss-error').then(v=>{state.error=v.error;paint();}).catch(error));$('#match-icon').addEventListener('error',()=>{const icon=$('#match-icon');if(!icon.src.endsWith('/oracle-portrait.svg')){failedPortraits.add(icon.getAttribute('src'));icon.src='oracle-portrait.svg';}});
   await window.__TAURI__.event.listen('oracle-error',({payload})=>error(payload));

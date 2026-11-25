@@ -105,6 +105,9 @@ input:checked+.switch:before{transform:translateX(calc(18 * var(--u)));backgroun
 input:focus-visible+.switch{outline:2px solid #ffe0ac;outline-offset:4px}
 input[type=color]{width:calc(43 * var(--u));height:calc(33 * var(--u));padding:3px;border:1px solid #9d7f68;border-radius:3px;background:#151014;cursor:pointer}
 .shortcut-link{font-size:calc(14 * var(--u));margin:0 0 calc(9 * var(--u))}
+.guide-controls{display:grid;grid-template-columns:1fr 1fr;gap:calc(24 * var(--u))}
+.control-column{min-width:0}.control-column+.control-column{border-left:1px solid #98734b50;padding-left:calc(24 * var(--u))}
+.guide-controls .setting-row{gap:calc(12 * var(--u))}.guide-controls p{max-width:calc(310 * var(--u))}
 .updates-card .secondary{flex-shrink:0}
 .updates-card p{line-height:1.35}
 .secondary:disabled{opacity:.55}

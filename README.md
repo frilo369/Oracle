@@ -20,4 +20,6 @@ Version 1.9 recreates the owner's dashboard reference with gold frames, ruby con
 
 Version 2.0 fixes Windows installed-path recognition so startup checks and **Check for updates** quietly download, verify, install and restart an installed copy when a newer version is available. No manual setup or download-page step is required for future updates. See `docs/validation-2.0.md`.
 
+Version 2.2 adds an opt-in **Settings → Augment overlay · Beta** for ARAM Mayhem in borderless fullscreen, with English augment names. It uses local Windows text recognition to identify three offered cards, then draws champion-specific pick rates and reported tiers over their lower area. It follows rerolls and hides on uncertain recognition, selection, or switching away from League. **Preview pick rates and tiers** exercises the recognition and overlay without a match. This is an experimental first implementation; actual Mayhem positioning still needs in-game validation. See `docs/augment-overlay.md` for requirements, tests and limits.
+
 Independent project by FrYiLo; not affiliated with Riot Games. League artwork belongs to Riot Games. Provider pages and availability are controlled by their owners. See `docs/ideas.md` for proposed future features and `docs/provenance.md` for reused source.

@@ -9,6 +9,7 @@ mod league;
 mod league_connection;
 mod league_path;
 mod match_guide;
+mod overlay;
 mod procs;
 mod settings;
 mod shell;
@@ -132,6 +133,7 @@ fn main() {
             league::watch(app.handle().clone());
             switcher::watch(app.handle().clone());
             update::startup(app.handle().clone());
+            overlay::watch(app.handle().clone());
             Ok(())
         })
         .build(context);

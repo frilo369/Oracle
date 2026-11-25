@@ -133,7 +133,7 @@ pub fn catalogue(root: &Path, fixture: bool) -> Result<Value, String> {
         )
     })
 }
-fn tencent_payload(payload: &Value, field: &str) -> Option<Value> {
+pub(crate) fn tencent_payload(payload: &Value, field: &str) -> Option<Value> {
     let mut v = payload.clone();
     for _ in 0..7 {
         if let Some(s) = v.as_str() {

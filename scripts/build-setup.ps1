@@ -42,11 +42,20 @@ namespace Oracle.Installer { static class BuildInfo { public const string Versio
     & $csc @common '/define:UNINSTALLER' ("/out:"+(Join-Path $payload 'bin/Uninstall.exe')) @sources
     if ($LASTEXITCODE) { throw 'Uninstaller compilation failed' }
     Copy-Item -LiteralPath $exe -Destination (Join-Path $payload 'bin/oracle.exe')
-    Add-Type -AssemblyName System.IO.Compression.FileSystem
+    Add-Type -AssemblyName System.IO.Compression,System.IO.Compression.FileSystem
     $zip=Join-Path $stage 'payload.zip'
-    [IO.Compression.ZipFile]::CreateFromDirectory($payload,$zip,[IO.Compression.CompressionLevel]::Optimal,$false)
+    # .NET Framework's CreateFromDirectory can emit backslashes, while the
+    # installer deliberately looks up exact ZIP names with forward slashes.
+    $payloadFiles=@(Get-ChildItem -LiteralPath $payload -File -Recurse|Sort-Object FullName)
+    $archive=[IO.Compression.ZipFile]::Open($zip,[IO.Compression.ZipArchiveMode]::Create)
+    try {
+        foreach($file in $payloadFiles){
+            $relative=$file.FullName.Substring($payload.Length+1).Replace('\','/')
+            [IO.Compression.ZipFileExtensions]::CreateEntryFromFile($archive,$file.FullName,$relative,[IO.Compression.CompressionLevel]::Optimal)|Out-Null
+        }
+    } finally {$archive.Dispose()}
     $manifest=Join-Path $stage 'payload.sha256'
-    $lines=foreach($file in Get-ChildItem -LiteralPath $payload -File -Recurse|Sort-Object FullName){"{0}`t{1}`t{2}" -f (Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash.ToLowerInvariant(),$file.Length,$file.FullName.Substring($payload.Length+1).Replace('\','/')}
+    $lines=foreach($file in $payloadFiles){"{0}`t{1}`t{2}" -f (Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash.ToLowerInvariant(),$file.Length,$file.FullName.Substring($payload.Length+1).Replace('\','/')}
     [IO.File]::WriteAllLines($manifest,[string[]]$lines,[Text.UTF8Encoding]::new($false))
     & $csc @common "/out:$out" "/resource:$zip,Oracle.payload.zip" "/resource:$manifest,Oracle.payload.sha256" @sources
     if ($LASTEXITCODE) { throw 'Setup compilation failed' }

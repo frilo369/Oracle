@@ -1,5 +1,7 @@
 pub fn event(root: &std::path::Path, kind: &str, value: serde_json::Value) {
     if root.join("fixture-mode").exists() {
+        static WRITES: std::sync::Mutex<()> = std::sync::Mutex::new(());
+        let _write = WRITES.lock().unwrap_or_else(|e| e.into_inner());
         use std::io::Write;
         if let Ok(mut log) = std::fs::OpenOptions::new()
             .create(true)

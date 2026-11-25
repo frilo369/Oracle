@@ -183,6 +183,7 @@ fn dashboard_snapshot(view: &Value, compact: bool) -> Value {
         "detectedChampion",
         "error",
         "update",
+        "overlay",
     ] {
         snapshot[key] = view[key].clone();
     }
@@ -193,6 +194,7 @@ fn dashboard_snapshot(view: &Value, compact: bool) -> Value {
         "guideHotkey",
         "assetColour",
         "lastGuide",
+        "overlayEnabled",
     ] {
         snapshot["settings"][key] = view["settings"][key].clone();
     }
@@ -225,6 +227,12 @@ pub async fn action(app: AppHandle, kind: String, id: Value) -> Result<Value, St
     let state = app.state::<Desktop>();
     match kind.as_str() {
         "check-updates" => crate::update::request(app.clone()),
+        "overlay-preview" => {
+            let handle = app.clone();
+            tauri::async_runtime::spawn_blocking(move || crate::overlay::preview(&handle))
+                .await
+                .map_err(|e| e.to_string())??;
+        }
         "capture" => {
             state.view.lock().map_err(|_| "State unavailable")?["guideCapture"] = json!(id == true);
         }
@@ -327,6 +335,28 @@ pub async fn action(app: AppHandle, kind: String, id: Value) -> Result<Value, St
         "fixture" => {
             if !state.preview {
                 return Err("Fixture mode is disabled".into());
+            }
+            if id["overlayInspect"] == true {
+                return Ok(crate::overlay::inspect(&app));
+            }
+            if let Some(w) = app.get_webview_window("overlay-preview") {
+                if id["closeOverlayPreview"] == true {
+                    w.close().map_err(|e| e.to_string())?;
+                }
+                if let Some(size) = id["overlayPreviewSize"].as_array() {
+                    let width = size
+                        .first()
+                        .and_then(Value::as_u64)
+                        .filter(|n| (800..=1600).contains(n))
+                        .ok_or("Invalid overlay width")?;
+                    let height = size
+                        .get(1)
+                        .and_then(Value::as_u64)
+                        .filter(|n| (600..=1100).contains(n))
+                        .ok_or("Invalid overlay height")?;
+                    w.set_size(tauri::LogicalSize::new(width as f64, height as f64))
+                        .map_err(|e| e.to_string())?;
+                }
             }
             if let Some(scenario) = id["updateScenario"].as_str() {
                 crate::update::fixture(&state, scenario)?;

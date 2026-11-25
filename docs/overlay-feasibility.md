@@ -1,6 +1,6 @@
 # Augment-selection overlay feasibility
 
-25 November 2026. Owner asked whether Oracle could automatically show win/pick percentages under offered augments during a fullscreen match. This is an investigation, not an implemented feature or a settled change to the owner's display mode.
+25 November 2026. Owner asked whether Oracle could automatically show win/pick percentages under offered augments during a fullscreen match. This records the initial investigation. The subsequent start instruction led to the [2.2 Mayhem beta](augment-overlay.md); the original investigation itself did not change application behaviour.
 
 ## Findings
 
