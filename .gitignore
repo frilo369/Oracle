@@ -1,0 +1,6 @@
+/target/
+/dist/
+/.test/
+/dependencies/
+/.claude/settings.local.json
+*.log
