@@ -110,22 +110,81 @@ pub fn save(path: &Path, value: &Value) -> Result<(), String> {
     }
     result
 }
-pub fn startup(enabled: bool) -> Result<(), String> {
+pub struct StartupChange {
+    before: Option<winreg::RegValue<'static>>,
+    after: Option<winreg::RegValue<'static>>,
+}
+impl StartupChange {
+    pub fn rollback(self) -> Result<(), String> {
+        use winreg::{enums::HKEY_CURRENT_USER, RegKey};
+        let run = RegKey::predef(HKEY_CURRENT_USER)
+            .open_subkey_with_flags(
+                r"Software\Microsoft\Windows\CurrentVersion\Run",
+                winreg::enums::KEY_READ | winreg::enums::KEY_WRITE,
+            )
+            .map_err(|e| e.to_string())?;
+        let current = startup_value(&run)?;
+        if current != self.after {
+            return Err(
+                "Windows startup changed during saving; the newer entry was preserved".into(),
+            );
+        }
+        match self.before {
+            Some(value) => run.set_raw_value("Oracle", &value),
+            None => match run.delete_value("Oracle") {
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+                result => result,
+            },
+        }
+        .map_err(|e| e.to_string())
+    }
+}
+fn startup_value(run: &winreg::RegKey) -> Result<Option<winreg::RegValue<'static>>, String> {
+    match run.get_raw_value("Oracle") {
+        Ok(value) => Ok(Some(value)),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
+        Err(e) => Err(e.to_string()),
+    }
+}
+fn owns_startup(current: &str, executable: &Path) -> bool {
+    current.eq_ignore_ascii_case(&format!("\"{}\" --tray", executable.display()))
+}
+pub fn startup(enabled: bool) -> Result<StartupChange, String> {
     use winreg::{enums::HKEY_CURRENT_USER, RegKey};
     let (run, _) = RegKey::predef(HKEY_CURRENT_USER)
         .create_subkey(r"Software\Microsoft\Windows\CurrentVersion\Run")
         .map_err(|e| e.to_string())?;
+    let before = startup_value(&run)?;
+    let executable = std::env::current_exe().map_err(|e| e.to_string())?;
     if enabled {
-        let executable = std::env::current_exe().map_err(|e| e.to_string())?;
         run.set_value("Oracle", &format!("\"{}\" --tray", executable.display()))
-            .map_err(|e| e.to_string())
-    } else {
+            .map_err(|e| e.to_string())?;
+    } else if run
+        .get_value::<String, _>("Oracle")
+        .ok()
+        .is_some_and(|current| owns_startup(&current, &executable))
+    {
         match run.delete_value("Oracle") {
             Ok(()) => Ok(()),
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
             Err(e) => Err(e.to_string()),
-        }
+        }?;
     }
+    Ok(StartupChange {
+        before,
+        after: startup_value(&run)?,
+    })
+}
+
+#[test]
+fn startup_removal_only_owns_this_executable() {
+    let exe = Path::new(r"C:\Oracle\oracle.exe");
+    assert!(owns_startup(r#""c:\oracle\Oracle.exe" --tray"#, exe));
+    assert!(!owns_startup(r#""C:\Other\oracle.exe" --tray"#, exe));
+    assert!(!owns_startup(
+        r#""C:\Oracle\oracle.exe" --tray --extra"#,
+        exe
+    ));
 }
 
 #[test]

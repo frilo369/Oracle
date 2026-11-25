@@ -3,10 +3,32 @@
 import {readFileSync,writeFileSync} from 'node:fs';
 import {fileURLToPath} from 'node:url';
 import {join} from 'node:path';
+import {spawnSync} from 'node:child_process';
 const root=fileURLToPath(new URL('../',import.meta.url));
 const reference=process.argv.slice(2).find(arg=>arg!=='--check')||String.raw`C:\Users\fryil\Documents\Rust-Friloverse-Skins`;
 const pending=[];
 function replaceOnce(source,find,replacement){if(source.split(find).length!==2)throw Error('Reference changed near '+find.slice(0,75)+'; review the Oracle adapter.');return source.replace(find,replacement);}
+// Keep Oracle's audited lifecycle fixes when intentionally refreshing the reference.
+// Exact hunks fail closed when reference code changes, instead of silently losing a fix.
+function auditPatch(source,file){
+  const patch=readFileSync(join(root,'scripts/guide-audit.patch'),'utf8').replaceAll('\r\n','\n');
+  const section=patch.split('diff --git ').find(s=>s.startsWith(`a/src-tauri/src/${file} b/src-tauri/src/${file}\n`));
+  if(!section)return source;
+  const formatted=spawnSync('rustfmt',['--edition','2021','--emit','stdout'],{input:source,encoding:'utf8',windowsHide:true});
+  if(formatted.status!==0)throw Error('Could not format reference adapter: '+formatted.stderr);
+  const lines=formatted.stdout.replaceAll('\r\n','\n').split('\n');let offset=0;
+  const hunks=section.split(/(?=^@@ )/m).slice(1);
+  for(const hunk of hunks){
+    const rows=hunk.split('\n'),match=/^@@ -(\d+)(?:,\d+)? \+\d+(?:,\d+)? @@/.exec(rows.shift());
+    if(!match)throw Error('Invalid lifecycle patch');
+    const old=[],replacement=[];
+    for(const row of rows){if(row[0]===' '||row[0]==='-')old.push(row.slice(1));if(row[0]===' '||row[0]==='+')replacement.push(row.slice(1));}
+    const at=Number(match[1])-1+offset;
+    if(JSON.stringify(lines.slice(at,at+old.length))!==JSON.stringify(old))throw Error(`Reference changed at ${file}:${match[1]}; review guide-audit.patch before syncing.`);
+    lines.splice(at,old.length,...replacement);offset+=replacement.length-old.length;
+  }
+  return lines.join('\n');
+}
 for(const file of ['guide_keys.rs','switcher.rs','match_guide.rs']) {
   let source=readFileSync(join(reference,'src-tauri/src',file),'utf8').replaceAll('\r\n','\n');
   if(file==='switcher.rs'){
@@ -80,7 +102,7 @@ fn open_target(app:&AppHandle,id:u64,mode:&str,champions:&serde_json::Value)->Re
         if !shortcut_enabled(app) {`);
     source=replaceOnce(source,'    } else if matches!(current, GuideShortcut::NoMatch) {','    } else if matches!(current, GuideShortcut::NoMatch) {\n        if let Ok(mut view)=state.view.lock(){view["shortcutStatus"]=json!("waiting");}');
   }
-  pending.push([join(root,'src-tauri/src',file),source]);
+  pending.push([join(root,'src-tauri/src',file),auditPatch(source,file)]);
 }
 if(!process.argv.includes('--check'))for(const [path,source] of pending)writeFileSync(path,source);
 console.log(process.argv.includes('--check')?'Reference adapters validated without writing files.':'Native guide modules synchronized with the reference.');

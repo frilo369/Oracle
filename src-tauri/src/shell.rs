@@ -12,11 +12,12 @@ pub struct Desktop {
     pub root: PathBuf,
     pub view: Mutex<Value>,
     pub preview: bool,
+    pub isolated: bool,
     pub closing: AtomicBool,
     save_gate: Mutex<()>,
 }
 impl Desktop {
-    pub fn new(root: PathBuf, preview: bool) -> Self {
+    pub fn new(root: PathBuf, preview: bool, isolated: bool) -> Self {
         let (settings, error) = crate::settings::load(&root);
         let catalogue: Value =
             serde_json::from_str(include_str!("../../src/ui/guide/mayhem-catalogue.json"))
@@ -26,6 +27,7 @@ impl Desktop {
         Self {
             root,
             preview,
+            isolated,
             closing: AtomicBool::new(false),
             save_gate: Mutex::new(()),
             view: Mutex::new(
@@ -172,12 +174,18 @@ pub async fn action(app: AppHandle, kind: String, id: Value) -> Result<Value, St
             }
             let old = state.view.lock().map_err(|_| "State unavailable")?["settings"].clone();
             let startup_changed = old["startWithWindows"] != next["startWithWindows"];
-            if startup_changed && !state.preview {
-                crate::settings::startup(next["startWithWindows"] == true)?;
-            }
+            let startup = if startup_changed && !state.isolated {
+                Some(crate::settings::startup(next["startWithWindows"] == true)?)
+            } else {
+                None
+            };
             if let Err(e) = crate::settings::save(&state.root.join("settings.json"), &next) {
-                if startup_changed && !state.preview {
-                    let _ = crate::settings::startup(old["startWithWindows"] == true);
+                if let Some(startup) = startup {
+                    if let Err(rollback) = startup.rollback() {
+                        return Err(format!(
+                            "{e}. Could not restore Windows startup: {rollback}"
+                        ));
+                    }
                 }
                 return Err(e);
             }

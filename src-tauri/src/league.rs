@@ -44,6 +44,11 @@ fn draft_champion(draft: &Value) -> Option<u64> {
         .filter(|id| *id > 0)
 }
 fn same_player(row: &Value, player: &Value) -> bool {
+    if let (Some(a), Some(b)) = (row["puuid"].as_str(), player["puuid"].as_str()) {
+        if !a.is_empty() && !b.is_empty() {
+            return a == b;
+        }
+    }
     ["puuid", "summonerId"].iter().any(|key| {
         let v = &player[*key];
         !v.is_null() && v != 0 && v != "" && row[*key] == *v
@@ -79,6 +84,9 @@ impl Tracker {
         if phase == "ChampSelect" && self.phase != "ChampSelect" {
             self.champion = None;
             self.game = None;
+            if !matches!(self.phase.as_str(), "Lobby" | "Matchmaking" | "ReadyCheck") {
+                self.mode = None;
+            }
         }
         if let Some(s) = session {
             let game = s["gameData"]["gameId"].as_u64().filter(|id| *id > 0);
@@ -87,7 +95,14 @@ impl Tracker {
                 self.mode = None;
             }
             self.game = game.or(self.game);
-            self.mode = mode(s, self.mode.as_deref());
+        }
+        // Draft queue information is available before gameflow on some clients;
+        // explicit gameflow queues take precedence, including unsupported queues.
+        if let Some(draft) = draft {
+            self.mode = mode(draft, self.mode.as_deref());
+        }
+        if let Some(session) = session {
+            self.mode = mode(session, self.mode.as_deref());
         }
         if active {
             self.champion = draft.and_then(draft_champion).or(self.champion);
@@ -98,6 +113,10 @@ impl Tracker {
             }
         } else {
             self.champion = None;
+            self.game = None;
+            if !matches!(phase, "Lobby" | "Matchmaking" | "ReadyCheck") {
+                self.mode = None;
+            }
         }
         self.phase = phase.to_owned();
     }
@@ -183,9 +202,12 @@ pub fn watch(app: AppHandle) {
                     let next = Connection::find(None);
                     if next != connection {
                         player = None;
+                        if next.is_some() {
+                            tracker = Tracker::default();
+                        }
                     }
                     connection = next;
-                    let _ = event_connection.send(connection.clone());
+                    crate::league_connection::publish(&event_connection, connection.clone());
                     discovery = now + Duration::from_secs(4);
                 }
                 let fresh = connection
@@ -200,7 +222,19 @@ pub fn watch(app: AppHandle) {
                     let draft = matches!(phase.as_str(), "ChampSelect" | "GameStart" | "Reconnect")
                         .then(|| c.get(&http, "/lol-champ-select/v1/session"))
                         .flatten();
-                    if player.is_none() {
+                    let entering_match = phase == "ChampSelect" && tracker.phase != phase;
+                    let identity_mismatch =
+                        matches!(phase.as_str(), "GameStart" | "InProgress" | "Reconnect")
+                            && session
+                                .as_ref()
+                                .is_some_and(|s| s["gameData"]["teamOne"].is_array())
+                            && player.as_ref().is_some_and(|p| {
+                                session
+                                    .as_ref()
+                                    .and_then(|s| session_champion(s, p))
+                                    .is_none()
+                            });
+                    if player.is_none() || entering_match || identity_mismatch {
                         player = c.get(&http, "/lol-summoner/v1/current-summoner");
                     }
                     if matches!(phase.as_str(), "Lobby" | "Matchmaking" | "ReadyCheck") {
@@ -276,4 +310,64 @@ fn a_new_game_never_reuses_the_old_champion() {
     );
     assert!(t.target().is_null());
     assert_eq!(t.mode.as_deref(), Some("aram"));
+}
+
+#[test]
+fn next_draft_cannot_reuse_the_previous_games_mode() {
+    let mut t = Tracker {
+        phase: "InProgress".into(),
+        champion: Some(1),
+        mode: Some("mayhem".into()),
+        game: Some(5),
+    };
+    let draft = json!({"localPlayerCellId":2,"myTeam":[{"cellId":2,"championId":103}]});
+    t.read("EndOfGame", None, None, None);
+    t.read("ChampSelect", None, Some(&draft), None);
+    assert!(t.target().is_null());
+    let draft =
+        json!({"queueId":450,"localPlayerCellId":2,"myTeam":[{"cellId":2,"championId":103}]});
+    t.read(
+        "ChampSelect",
+        Some(&json!({"gameData":{}})),
+        Some(&draft),
+        None,
+    );
+    assert_eq!(t.target(), json!({"id":103,"mode":"aram"}));
+    t.read(
+        "ChampSelect",
+        Some(&json!({"queueId":99999})),
+        Some(&draft),
+        None,
+    );
+    assert!(
+        t.target().is_null(),
+        "an explicit unsupported queue must clear the draft fallback"
+    );
+}
+
+#[test]
+fn lobby_mode_survives_into_draft_but_not_a_direct_new_match() {
+    let draft = json!({"localPlayerCellId":2,"myTeam":[{"cellId":2,"championId":103}]});
+    let mut t = Tracker {
+        phase: "Lobby".into(),
+        mode: Some("arena".into()),
+        ..Default::default()
+    };
+    t.read("ChampSelect", None, Some(&draft), None);
+    assert_eq!(t.target()["mode"], "arena");
+    t.phase = "InProgress".into();
+    t.read("ChampSelect", None, Some(&draft), None);
+    assert!(t.target().is_null());
+}
+
+#[test]
+fn conflicting_puuids_cannot_match_through_a_shared_legacy_id() {
+    assert!(!same_player(
+        &json!({"puuid":"other","summonerId":1}),
+        &json!({"puuid":"local","summonerId":1})
+    ));
+    assert!(same_player(
+        &json!({"summonerId":1}),
+        &json!({"puuid":"local","summonerId":1})
+    ));
 }

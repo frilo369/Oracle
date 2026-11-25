@@ -35,6 +35,33 @@ pub(crate) struct Connection {
     password: String,
 }
 
+pub(crate) fn publish(sender: &watch::Sender<Option<Connection>>, next: Option<Connection>) {
+    sender.send_if_modified(|current| {
+        if *current == next {
+            false
+        } else {
+            *current = next;
+            true
+        }
+    });
+}
+
+#[test]
+fn unchanged_discovery_keeps_the_event_connection_open() {
+    let (sender, receiver) = watch::channel(None);
+    publish(&sender, None);
+    assert!(!receiver.has_changed().unwrap());
+    let connection = Connection::new(1, "12345", "test-only").unwrap();
+    publish(&sender, Some(connection.clone()));
+    let mut receiver = receiver;
+    assert!(receiver.has_changed().unwrap());
+    receiver.borrow_and_update();
+    publish(&sender, Some(connection));
+    assert!(!receiver.has_changed().unwrap());
+    publish(&sender, None);
+    assert!(receiver.has_changed().unwrap());
+}
+
 impl Connection {
     fn new(pid: u32, port: &str, password: &str) -> Option<Self> {
         let port = port.parse::<u16>().ok().filter(|port| *port > 0)?;

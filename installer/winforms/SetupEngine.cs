@@ -5,6 +5,7 @@ using System.Globalization;
 using System.IO;
 using System.IO.Compression;
 using System.Reflection;
+using System.Collections.Generic;
 using System.Security.AccessControl;
 using System.Security.Cryptography;
 using System.Security.Principal;
@@ -121,10 +122,55 @@ namespace Oracle.Installer
                 key.SetValue("NoModify",1,RegistryValueKind.DWord);key.SetValue("NoRepair",1,RegistryValueKind.DWord);
             }
             Shortcut(true);
-            using(RegistryKey run=Registry.CurrentUser.OpenSubKey(RunKey,true))
+        }
+        // Registration is part of the file transaction: restore exact values and the shortcut
+        // if a later registry/COM operation fails. Startup belongs to the app's settings.
+        sealed class RegistryState
+        {
+            readonly string path,only;readonly bool existed;
+            readonly Dictionary<string,object> values=new Dictionary<string,object>();
+            readonly Dictionary<string,RegistryValueKind> kinds=new Dictionary<string,RegistryValueKind>();
+            internal RegistryState(string path,string only)
             {
-                if(run!=null){string current=Convert.ToString(run.GetValue("Oracle"));if(!string.IsNullOrEmpty(current))run.SetValue("Oracle","\""+Exe+"\" --tray");}
+                this.path=path;this.only=only;
+                using(RegistryKey key=Registry.CurrentUser.OpenSubKey(path))
+                {
+                    existed=key!=null;if(key==null)return;
+                    foreach(string name in key.GetValueNames())if(only==null||name==only){values[name]=key.GetValue(name,null,RegistryValueOptions.DoNotExpandEnvironmentNames);kinds[name]=key.GetValueKind(name);}
+                }
             }
+            internal void Restore()
+            {
+                if(!existed&&only==null){Registry.CurrentUser.DeleteSubKeyTree(path,false);return;}
+                using(RegistryKey key=Registry.CurrentUser.CreateSubKey(path))
+                {
+                    foreach(string name in key.GetValueNames())if((only==null||name==only)&&!values.ContainsKey(name))key.DeleteValue(name,false);
+                    foreach(KeyValuePair<string,object> value in values)key.SetValue(value.Key,value.Value,kinds[value.Key]);
+                }
+            }
+        }
+        sealed class RegistrationState
+        {
+            readonly RegistryState uninstall,run;
+            readonly string link;
+            readonly byte[] bytes;
+            internal RegistrationState():this(UninstallKey,RunKey,Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Programs),"Oracle.lnk")){}
+            internal RegistrationState(string uninstallPath,string runPath,string linkPath)
+            {uninstall=new RegistryState(uninstallPath,null);run=new RegistryState(runPath,"Oracle");link=linkPath;CheckPath(link);bytes=File.Exists(link)?File.ReadAllBytes(link):null;}
+            internal void Restore()
+            {
+                List<string> errors=new List<string>();
+                foreach(Action restore in new Action[]{uninstall.Restore,run.Restore,()=>{if(bytes!=null)File.WriteAllBytes(link,bytes);else if(File.Exists(link))File.Delete(link);}})
+                    try{restore();}catch(Exception ex){errors.Add(ex.Message);}
+                if(errors.Count>0)throw new IOException("Registration rollback failed: "+string.Join("; ",errors));
+            }
+        }
+        static readonly string[] ManagedFiles={"oracle.exe","Uninstall.exe",".verify-payload"};
+        static bool Managed(string path){return File.Exists(path)&&Array.Exists(ManagedFiles,name=>string.Equals(Path.GetFileName(path),name,StringComparison.OrdinalIgnoreCase));}
+        static void MoveEntry(string source,string destination){CheckPath(source);CheckPath(destination);if(Directory.Exists(source))Directory.Move(source,destination);else File.Move(source,destination);}
+        void Cleanup(string path)
+        {
+            try{RemoveWork(path);}catch(Exception ex){output("##warning Temporary files retained at "+path+": "+ex.Message);}
         }
         void Probe()
         {
@@ -136,6 +182,11 @@ namespace Oracle.Installer
         {
             string stage=PrivateDirectory(options.Root,".oracle-stage-");string backup=null;
             try {
+                if(File.Exists(Exe))
+                {
+                    FileVersionInfo installed=FileVersionInfo.GetVersionInfo(Exe);
+                    if(new Version(installed.FileMajorPart,installed.FileMinorPart)>new Version(BuildInfo.Version))throw new IOException("A newer Oracle is already installed.");
+                }
                 Status("Checking Oracle's files...");Progress(15);Expand(stage);
                 if(!options.Fixture&&!WebviewInstalled())
                 {
@@ -146,31 +197,53 @@ namespace Oracle.Installer
                 }
                 if(!options.Fixture)CloseOracle();
                 Progress(65);Status("Installing Oracle...");
-                if(File.Exists(Exe))
-                {
-                    FileVersionInfo installed=FileVersionInfo.GetVersionInfo(Exe);
-                    if(new Version(installed.FileMajorPart,installed.FileMinorPart)>new Version(BuildInfo.Version))throw new IOException("A newer Oracle is already installed.");
+                RegistrationState registration=options.Fixture?null:new RegistrationState();
+                if(Directory.Exists(Bin)){CheckTree(Bin);backup=Path.Combine(options.Root,".oracle-backup-"+Guid.NewGuid().ToString("N"));Directory.Move(Bin,backup);}
+                List<string> preserved=new List<string>();bool placed=false;
+                try {
+                    Directory.Move(Path.Combine(stage,"bin"),Bin);placed=true;
+                    if(backup!=null)foreach(string entry in Directory.GetFileSystemEntries(backup))if(!Managed(entry))
+                    {string name=Path.GetFileName(entry);MoveEntry(entry,Path.Combine(Bin,name));preserved.Add(name);}
+                    if(!options.Fixture)Register();else File.WriteAllText(Path.Combine(Bin,".verify-payload"),"Oracle fixture");
                 }
-                if(Directory.Exists(Bin)){backup=Path.Combine(options.Root,".oracle-backup-"+Guid.NewGuid().ToString("N"));Directory.Move(Bin,backup);}
-                try {Directory.Move(Path.Combine(stage,"bin"),Bin);if(!options.Fixture)Register();else File.WriteAllText(Path.Combine(Bin,".verify-payload"),"Oracle fixture");}
-                catch {if(Directory.Exists(Bin))RemoveWork(Bin);if(backup!=null){Directory.Move(backup,Bin);backup=null;}throw;}
-                if(backup!=null){RemoveWork(backup);backup=null;}
+                catch(Exception failure) {
+                    List<string> errors=new List<string>();
+                    if(registration!=null)try{registration.Restore();}catch(Exception ex){errors.Add(ex.Message);}
+                    try {
+                        if(backup!=null)foreach(string name in preserved)MoveEntry(Path.Combine(Bin,name),Path.Combine(backup,name));
+                        if(placed&&Directory.Exists(Bin))RemoveWork(Bin);
+                        if(backup!=null){Directory.Move(backup,Bin);backup=null;}
+                    }catch(Exception ex){errors.Add("Files retained at "+backup+": "+ex.Message);}
+                    if(errors.Count>0)throw new IOException(failure.Message+" Rollback needs attention: "+string.Join("; ",errors),failure);
+                    throw;
+                }
+                if(backup!=null){Cleanup(backup);backup=null;}
                 Progress(100);Status("Oracle "+BuildInfo.Version+" is installed.");
-            } finally {RemoveWork(stage);}
+            } finally {Cleanup(stage);}
         }
         void Uninstall()
         {
             if(!options.Fixture)CloseOracle();
             Status("Removing Oracle...");Progress(25);
-            foreach(string file in new string[]{"oracle.exe","Uninstall.exe",".verify-payload"}){string path=Path.Combine(Bin,file);CheckPath(path);if(File.Exists(path))File.Delete(path);}
-            if(!options.Fixture)
-            {
+            string removed=PrivateDirectory(options.Root,".oracle-remove-");List<string> staged=new List<string>();
+            RegistrationState registration=options.Fixture?null:new RegistrationState();
+            try {
+              foreach(string file in ManagedFiles){string path=Path.Combine(Bin,file);CheckPath(path);if(File.Exists(path)){File.Move(path,Path.Combine(removed,file));staged.Add(file);}}
+              if(!options.Fixture) {
                 using(RegistryKey run=Registry.CurrentUser.OpenSubKey(RunKey,true))if(run!=null)
                 {
                     string current=Convert.ToString(run.GetValue("Oracle"));if(string.Equals(current,"\""+Exe+"\" --tray",StringComparison.OrdinalIgnoreCase))run.DeleteValue("Oracle",false);
                 }
                 Registry.CurrentUser.DeleteSubKeyTree(UninstallKey,false);Shortcut(false);
+              }
+            } catch(Exception failure) {
+                List<string> errors=new List<string>();
+                foreach(string file in staged)try{File.Move(Path.Combine(removed,file),Path.Combine(Bin,file));}catch(Exception ex){errors.Add(ex.Message);}
+                if(registration!=null)try{registration.Restore();}catch(Exception ex){errors.Add(ex.Message);}
+                if(errors.Count>0)throw new IOException(failure.Message+" Rollback needs attention at "+removed+": "+string.Join("; ",errors),failure);
+                Cleanup(removed);throw;
             }
+            Cleanup(removed);
             if(Directory.Exists(Bin)&&Directory.GetFileSystemEntries(Bin).Length==0)Directory.Delete(Bin);
             Progress(100);Status("Oracle is removed. Your preferences are preserved.");
         }

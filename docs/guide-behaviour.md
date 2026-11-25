@@ -22,7 +22,9 @@ The owner requires the reference's complete guide-opening lifecycle, including f
 4. **Application adapters:** Oracle identity/icon, its independent data directory and Desktop state, manual guide opening, and shortcut status for the compact panel. No skin engine, LTK, patcher, party or Vanguard module is imported.
 5. **Acceptance only:** a validated workspace profile gets a separate instance identifier, an owned game stand-in and fixture-only activation/focus traces. Production instance identity and profile remain unchanged. The stand-in can minimize on focus loss; it is not an actual exclusive DirectX League session.
 
-`scripts/sync-guide-reference.mjs` records the exact three-module sync and these adapters. Do not remove them when refreshing reference code. UI and parser changes are separate and are not overwritten by the sync.
+`scripts/sync-guide-reference.mjs` records the exact three-module sync and these adapters. `scripts/guide-audit.patch` preserves the subsequent lifecycle fixes after formatting, with exact context checks before writing files. Keep both when refreshing reference code. UI and parser changes are separate and are not overwritten by the sync.
+
+The 1.6 audit serializes tray/manual/current opens and match-end cleanup with shortcut/prewarm operations. Shortcut paths already holding the opening mutex call the internal unlocked current-guide function. An active target is checked again after loading and before showing. Hidden preparation records success only after loading, retries after capture/disabled-key/busy-lock cases with a two-second bound, and validates the current target before it starts. A second `--tray` invocation remains quiet. See `validation-1.6.md` for regressions and measured fixture timings.
 
 `scripts/sync-guide-assets.mjs` extracts the read-only decoder and guide asset cache. It excludes the reference's WAD-writing/skin functions, party icons and chroma logic, and preserves Oracle's protocol/test adapter tail. The installed League files are never modified. No LTK dependency is introduced.
 

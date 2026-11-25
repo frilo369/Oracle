@@ -519,6 +519,14 @@ pub(crate) fn watch(app: AppHandle) {
         }
     });
 }
+fn trace_origin(kind: &str, value: serde_json::Value) {
+    if std::env::args().any(|a| a == "--fixture") {
+        if let Some(root) = std::env::var_os("ORACLE_DATA_DIR") {
+            crate::support::event(&std::path::PathBuf::from(root), kind, value);
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -573,13 +581,5 @@ mod tests {
     fn deliberate_second_tab_or_later_click_keeps_windows_choice() {
         assert_eq!(replay(Kind::Game, Kind::Riot, true, 2, 15), None);
         assert_eq!(replay(Kind::Guide, Kind::Other, true, 1, 701), None);
-    }
-}
-
-fn trace_origin(kind: &str, value: serde_json::Value) {
-    if std::env::args().any(|a| a == "--fixture") {
-        if let Some(root) = std::env::var_os("ORACLE_DATA_DIR") {
-            crate::support::event(&std::path::PathBuf::from(root), kind, value);
-        }
     }
 }

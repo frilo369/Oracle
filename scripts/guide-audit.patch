@@ -1,0 +1,224 @@
+diff --git a/src-tauri/src/match_guide.rs b/src-tauri/src/match_guide.rs
+index 31dfaed..ccc972b 100644
+--- a/src-tauri/src/match_guide.rs
++++ b/src-tauri/src/match_guide.rs
+@@ -364,6 +364,10 @@ fn load(
+ }
+ 
+ pub fn open(app: &AppHandle) -> Result<(), String> {
++    let _guard = OPENING.lock().unwrap_or_else(|p| p.into_inner());
++    open_current(app)
++}
++fn open_current(app: &AppHandle) -> Result<(), String> {
+     let desktop = app.state::<Desktop>();
+     let (target, champions) = {
+         let v = desktop.view.lock().map_err(|_| "State unavailable")?;
+@@ -376,7 +380,7 @@ pub fn open(app: &AppHandle) -> Result<(), String> {
+             Err("No active match guide".into())
+         };
+     };
+-    open_target(app, id, &mode, &champions)
++    open_target(app, id, &mode, &champions, true)
+ }
+ pub fn manual_open(app: &AppHandle, id: u64, mode: &str) -> Result<(), String> {
+     let _guard = OPENING.lock().unwrap_or_else(|p| p.into_inner());
+@@ -386,13 +390,14 @@ pub fn manual_open(app: &AppHandle, id: u64, mode: &str) -> Result<(), String> {
+         .lock()
+         .map_err(|_| "State unavailable")?["champions"]
+         .clone();
+-    open_target(app, id, mode, &champions)
++    open_target(app, id, mode, &champions, false)
+ }
+ fn open_target(
+     app: &AppHandle,
+     id: u64,
+     mode: &str,
+     champions: &serde_json::Value,
++    active_match: bool,
+ ) -> Result<(), String> {
+     let label = label_for(mode);
+     let existing = app.get_webview_window(label);
+@@ -400,16 +405,29 @@ fn open_target(
+         .as_ref()
+         .is_some_and(|w| w.is_visible().unwrap_or(false));
+     crate::switcher::remember_origin(visible);
+-    match existing.filter(|_| holds(label, id, &mode)) {
++    let (window, loaded) = match existing.filter(|_| holds(label, id, mode)) {
++        Some(w) => (w, true),
++        None => (load(app, id, mode, champions)?, false),
++    };
++    if active_match
++        && !app
++            .state::<Desktop>()
++            .view
++            .lock()
++            .is_ok_and(|v| match_target(&v) == Some((id, mode.to_owned())))
++    {
++        return Ok(());
++    }
++    match (loaded, visible) {
+         // F1 on an open guide only focuses it; a closed one reappears without reloading.
+-        Some(w) if visible => bring_forward(&w, true),
+-        Some(w) => show_maximized(&w),
+-        None => show_maximized(&load(app, id, &mode, &champions)?),
++        (true, true) => bring_forward(&window, true),
++        _ => show_maximized(&window),
+     }
+ }
+ 
+ static PREWARMING: AtomicBool = AtomicBool::new(false);
+ static PREWARMED: Mutex<Option<(u64, String)>> = Mutex::new(None);
++static PREWARM_RETRY: Mutex<Option<std::time::Instant>> = Mutex::new(None);
+ 
+ /// Prepares the current match's guide hidden during the loading screen, so the first F1 shows it
+ /// at once. Only for players who have used a guide before and have a guide key.
+@@ -420,7 +438,9 @@ fn prewarm(app: &AppHandle, view: &serde_json::Value) {
+         if *last == target {
+             return;
+         }
+-        last.clone_from(&target);
++        if target.is_none() {
++            *last = None;
++        }
+     }
+     let Some((id, mode)) = target else { return };
+     let state = app.state::<Desktop>();
+@@ -431,26 +451,49 @@ fn prewarm(app: &AppHandle, view: &serde_json::Value) {
+     {
+         return;
+     }
++    {
++        let mut retry = PREWARM_RETRY.lock().unwrap_or_else(|p| p.into_inner());
++        if retry.is_some_and(|at| at.elapsed() < std::time::Duration::from_secs(2))
++            || PREWARMING
++                .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
++                .is_err()
++        {
++            return;
++        }
++        *retry = Some(std::time::Instant::now());
++    }
+     let champions = view["champions"].clone();
+     let app = app.clone();
+     tauri::async_runtime::spawn_blocking(move || {
+-        PREWARMING.store(true, Ordering::SeqCst);
+         let result = match OPENING.try_lock() {
+             Ok(_opening) => {
++                let valid = app.state::<Desktop>().view.lock().is_ok_and(|v| {
++                    match_target(&v) == Some((id, mode.clone()))
++                        && v["guideCapture"] != true
++                        && v["settings"]["guideHotkey"].is_string()
++                });
++                if !valid || app.state::<Desktop>().is_closing() {
++                    PREWARMING.store(false, Ordering::SeqCst);
++                    return;
++                }
+                 let label = label_for(&mode);
+                 let current = app.get_webview_window(label);
+-                if current
++                if current.is_some() && holds(label, id, &mode) {
++                    Ok(true)
++                } else if current
+                     .as_ref()
+                     .is_some_and(|w| w.is_visible().unwrap_or(false))
+-                    || (current.is_some() && holds(label, id, &mode))
+                 {
+-                    Ok(())
++                    Ok(false)
+                 } else {
+-                    load(&app, id, &mode, &champions).map(drop)
++                    load(&app, id, &mode, &champions).map(|_| true)
+                 }
+             }
+-            Err(_) => Ok(()),
++            Err(_) => Ok(false),
+         };
++        if matches!(result, Ok(true)) {
++            *PREWARMED.lock().unwrap_or_else(|p| p.into_inner()) = Some((id, mode));
++        }
+         PREWARMING.store(false, Ordering::SeqCst);
+         if let Err(error) = result {
+             crate::errorlog::note(&app.state::<Desktop>().root, "guide prewarm", &error);
+@@ -518,14 +561,25 @@ pub fn shortcut(app: &AppHandle, current: &mut GuideShortcut, registered: &mut O
+         if let Ok(mut view) = state.view.lock() {
+             view["shortcutStatus"] = json!("waiting");
+         }
+-        if let Some(w) = app.get_webview_window("guide") {
+-            let _ = w.hide();
+-        }
+-        // MetaSRC runs in its own browser process; free it between matches.
+-        if let Some(w) = app.get_webview_window("meta-guide") {
+-            let _ = w.destroy();
+-        }
+-        forget_loaded("meta-guide");
++        let app = app.clone();
++        tauri::async_runtime::spawn_blocking(move || {
++            let _opening = OPENING.lock().unwrap_or_else(|p| p.into_inner());
++            if app
++                .state::<Desktop>()
++                .view
++                .lock()
++                .is_ok_and(|v| match_target(&v).is_none())
++            {
++                if let Some(w) = app.get_webview_window("guide") {
++                    let _ = w.hide();
++                }
++                // MetaSRC runs in its own browser process; free it between matches.
++                if let Some(w) = app.get_webview_window("meta-guide") {
++                    let _ = w.destroy();
++                }
++                forget_loaded("meta-guide");
++            }
++        });
+     }
+ }
+ static OPENING: Mutex<()> = Mutex::new(());
+@@ -565,7 +619,7 @@ pub(crate) fn open_from_activation(app: &AppHandle, hwnd: windows_sys::Win32::Fo
+         );
+         if !shortcut_enabled(app) {
+             crate::switcher::return_to_origin();
+-        } else if let Err(error) = open(app) {
++        } else if let Err(error) = open_current(app) {
+             crate::errorlog::note(&app.state::<Desktop>().root, "guide activation", &error);
+             if unsafe { GetForegroundWindow() } == hwnd {
+                 crate::switcher::return_to_origin();
+@@ -590,7 +644,7 @@ pub(crate) fn open_from_shortcut(app: &AppHandle) {
+         if !shortcut_enabled(&app) {
+             return;
+         }
+-        if let Err(error) = open(&app) {
++        if let Err(error) = open_current(&app) {
+             crate::errorlog::note(&app.state::<Desktop>().root, "guide hotkey", &error);
+         }
+     });
+diff --git a/src-tauri/src/switcher.rs b/src-tauri/src/switcher.rs
+index 3c9feec..288b725 100644
+--- a/src-tauri/src/switcher.rs
++++ b/src-tauri/src/switcher.rs
+@@ -519,6 +519,14 @@ pub(crate) fn watch(app: AppHandle) {
+         }
+     });
+ }
++fn trace_origin(kind: &str, value: serde_json::Value) {
++    if std::env::args().any(|a| a == "--fixture") {
++        if let Some(root) = std::env::var_os("ORACLE_DATA_DIR") {
++            crate::support::event(&std::path::PathBuf::from(root), kind, value);
++        }
++    }
++}
++
+ #[cfg(test)]
+ mod tests {
+     use super::*;
+@@ -575,11 +583,3 @@ mod tests {
+         assert_eq!(replay(Kind::Guide, Kind::Other, true, 1, 701), None);
+     }
+ }
+-
+-fn trace_origin(kind: &str, value: serde_json::Value) {
+-    if std::env::args().any(|a| a == "--fixture") {
+-        if let Some(root) = std::env::var_os("ORACLE_DATA_DIR") {
+-            crate::support::event(&std::path::PathBuf::from(root), kind, value);
+-        }
+-    }
+-}

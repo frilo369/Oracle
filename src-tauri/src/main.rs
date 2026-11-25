@@ -56,7 +56,7 @@ fn main() {
         .plugin(tauri_plugin_single_instance::init(|app, args, _| {
             if args.iter().any(|a| a == "--quit") {
                 app.exit(0);
-            } else {
+            } else if !args.iter().any(|a| a == "--tray") {
                 show_from_event(app);
             }
         }))
@@ -73,7 +73,7 @@ fn main() {
             shell::action,
             shell::guide_data
         ])
-        .setup(|app| {
+        .setup(move |app| {
             let root = std::env::var_os("ORACLE_DATA_DIR")
                 .map(std::path::PathBuf::from)
                 .unwrap_or(app.path().app_local_data_dir()?);
@@ -82,7 +82,7 @@ fn main() {
             if preview {
                 std::fs::write(root.join("fixture-mode"), b"")?;
             }
-            let state = shell::Desktop::new(root, preview);
+            let state = shell::Desktop::new(root, preview, qa);
             let quiet = std::env::args().any(|a| a == "--tray")
                 || state.view.lock().unwrap()["settings"]["launchInTray"] == true;
             app.manage(state);
