@@ -365,9 +365,9 @@ fn load(
 
 pub fn open(app: &AppHandle) -> Result<(), String> {
     let desktop = app.state::<Desktop>();
-    let target = {
+    let (target, champions) = {
         let v = desktop.view.lock().map_err(|_| "State unavailable")?;
-        match_target(&v)
+        (match_target(&v), v["champions"].clone())
     };
     let Some((id, mode)) = target else {
         return if desktop.preview {
@@ -376,21 +376,25 @@ pub fn open(app: &AppHandle) -> Result<(), String> {
             Err("No active match guide".into())
         };
     };
-    open_target(app, id, &mode)
+    open_target(app, id, &mode, &champions)
 }
-
 pub fn manual_open(app: &AppHandle, id: u64, mode: &str) -> Result<(), String> {
     let _guard = OPENING.lock().unwrap_or_else(|p| p.into_inner());
-    open_target(app, id, mode)
-}
-fn open_target(app: &AppHandle, id: u64, mode: &str) -> Result<(), String> {
     let champions = app
         .state::<Desktop>()
         .view
         .lock()
         .map_err(|_| "State unavailable")?["champions"]
         .clone();
-    let label = label_for(&mode);
+    open_target(app, id, mode, &champions)
+}
+fn open_target(
+    app: &AppHandle,
+    id: u64,
+    mode: &str,
+    champions: &serde_json::Value,
+) -> Result<(), String> {
+    let label = label_for(mode);
     let existing = app.get_webview_window(label);
     let visible = existing
         .as_ref()
@@ -467,7 +471,7 @@ impl GuideShortcut {
         }
         let binding = view["settings"]["guideHotkey"]
             .as_str()
-            .filter(|_| view["guideCapture"] != true && view["hotkeyContext"] != false)
+            .filter(|_| view["guideCapture"] != true)
             .map(str::to_owned);
         Self::InMatch(binding)
     }
@@ -542,11 +546,10 @@ fn opening_for_key() -> Option<std::sync::MutexGuard<'static, ()>> {
 fn shortcut_enabled(app: &AppHandle) -> bool {
     let state = app.state::<Desktop>();
     !state.is_closing()
-        && state.view.lock().is_ok_and(|v| {
-            !v["guideTarget"].is_null()
-                && v["guideCapture"] != true
-                && crate::switcher::hotkey_context(app)
-        })
+        && state
+            .view
+            .lock()
+            .is_ok_and(|v| !v["guideTarget"].is_null() && v["guideCapture"] != true)
 }
 
 pub(crate) fn open_from_activation(app: &AppHandle, hwnd: windows_sys::Win32::Foundation::HWND) {
@@ -555,6 +558,11 @@ pub(crate) fn open_from_activation(app: &AppHandle, hwnd: windows_sys::Win32::Fo
         return;
     };
     if unsafe { GetForegroundWindow() } == hwnd {
+        crate::support::event(
+            &app.state::<Desktop>().root,
+            "guide-activation",
+            json!({"foreground":true}),
+        );
         if !shortcut_enabled(app) {
             crate::switcher::return_to_origin();
         } else if let Err(error) = open(app) {

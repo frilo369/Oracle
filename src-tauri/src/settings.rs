@@ -7,7 +7,7 @@ use std::{
 };
 
 pub fn defaults() -> Value {
-    json!({"guideHotkey":"F1","assetColour":"#ae1236","theme":"umbra","launchInTray":false,"startWithWindows":false,"favorites":[],"notes":{}})
+    json!({"guideHotkey":"F1","assetColour":"#ae1236","theme":"umbra","launchInTray":true,"trayDefault13":true,"startWithWindows":false,"lastGuide":{"champion":103,"mode":"rift"}})
 }
 pub fn valid(key: &str, value: &Value) -> bool {
     match key {
@@ -21,7 +21,16 @@ pub fn valid(key: &str, value: &Value) -> bool {
             s.len() == 7 && s.starts_with('#') && s[1..].bytes().all(|b| b.is_ascii_hexdigit())
         }),
         "theme" => value == "umbra",
-        "launchInTray" | "startWithWindows" => value.is_boolean(),
+        "launchInTray" | "startWithWindows" | "trayDefault13" => value.is_boolean(),
+        "lastGuide" => value.as_object().is_some_and(|m| {
+            m.len() == 2
+                && value["champion"]
+                    .as_u64()
+                    .is_some_and(|id| id > 0 && id < 10000)
+                && value["mode"]
+                    .as_str()
+                    .is_some_and(|m| matches!(m, "rift" | "aram" | "arena" | "mayhem"))
+        }),
         "favorites" => value.as_array().is_some_and(|a| {
             a.len() <= 200
                 && a.iter()
@@ -44,6 +53,8 @@ pub fn load(root: &Path) -> (Value, Option<String>) {
         Ok(bytes) => match serde_json::from_slice::<Value>(&bytes) {
             Ok(doc) if doc.is_object() => {
                 for (key,value) in doc.as_object().unwrap() { if valid(key,value) { result[key] = value.clone(); } }
+                // One-time adoption of the owner's new tray default. A later opt-out is kept.
+                if doc["trayDefault13"] != true { result["launchInTray"]=json!(true);result["trayDefault13"]=json!(true); }
                 (result,None)
             }
             _ => (result, Some("Settings could not be read. The original file is preserved; save settings to replace it.".into())),
@@ -135,4 +146,27 @@ fn settings_validate_and_replace_atomically() {
         fs::read(dir.path().join("settings.json")).unwrap(),
         b"broken"
     );
+}
+
+#[test]
+fn tray_default_migrates_once_and_retired_notes_stay_preserved() {
+    let dir = tempfile::tempdir().unwrap();
+    assert_eq!(load(dir.path()).0["launchInTray"], true);
+    let legacy = json!({"guideHotkey":"F8","launchInTray":false,"notes":{"103":"Legacy 🤍"},"favorites":[103]});
+    save(&dir.path().join("settings.json"), &legacy).unwrap();
+    let (mut migrated, error) = load(dir.path());
+    assert!(error.is_none());
+    assert_eq!(migrated["launchInTray"], true);
+    assert_eq!(migrated["guideHotkey"], "F8");
+    assert_eq!(migrated["notes"], legacy["notes"]);
+    assert_eq!(migrated["favorites"], legacy["favorites"]);
+    migrated["launchInTray"] = json!(false);
+    save(&dir.path().join("settings.json"), &migrated).unwrap();
+    assert_eq!(
+        load(dir.path()).0["launchInTray"],
+        false,
+        "a deliberate opt-out survives restart"
+    );
+    assert!(valid("lastGuide", &json!({"champion":103,"mode":"arena"})));
+    assert!(!valid("lastGuide", &json!({"champion":0,"mode":"unknown"})));
 }

@@ -99,11 +99,13 @@ pub fn catalogue(root: &Path, fixture: bool) -> Result<Value, String> {
         capped_json(response, MAX_SOURCE)
     };
     let english = |name: &str| {
+        let local = crate::guide_assets::game_file(&format!("v1/{name}"))
+            .and_then(|(bytes, _)| serde_json::from_slice(&bytes).ok());
         catalogue_source(
             &cache.join(name),
             &format!("{ENGLISH}{name}"),
             now,
-            None,
+            local,
             &fetch,
         )
     };

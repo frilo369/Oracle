@@ -54,8 +54,9 @@ pub fn show_dashboard(app: &AppHandle) -> Result<(), String> {
             let w =
                 WebviewWindowBuilder::new(app, "dashboard", WebviewUrl::App("index.html".into()))
                     .title("Oracle")
-                    .inner_size(1120., 760.)
-                    .min_inner_size(880., 650.)
+                    .inner_size(580., 610.)
+                    .min_inner_size(520., 570.)
+                    .center()
                     .decorations(false)
                     .background_color(crate::match_guide::GROUND)
                     .data_directory(app.state::<Desktop>().root.join("Dashboard-WebView2"))
@@ -96,6 +97,10 @@ pub fn guide_page(app: &AppHandle, champion: u64) -> Result<WebviewWindow, Strin
             WebviewUrl::App(format!("guide/mayhem.html?champion={champion}").into()),
         )
         .title("Oracle · ARAM Mayhem")
+        .inner_size(1100., 760.)
+        .center()
+        .skip_taskbar(false)
+        .fullscreen(false)
         .visible(false)
         .focused(false)
         .background_color(crate::match_guide::GROUND)
@@ -157,6 +162,9 @@ pub async fn action(app: AppHandle, kind: String, id: Value) -> Result<Value, St
             let _gate = state.save_gate.lock().map_err(|_| "Settings unavailable")?;
             let mut next = state.view.lock().map_err(|_| "State unavailable")?["settings"].clone();
             for (key, value) in id.as_object().ok_or("Invalid settings")? {
+                if matches!(key.as_str(), "notes" | "favorites" | "trayDefault13") {
+                    return Err("This preference cannot be changed here".into());
+                }
                 if !crate::settings::valid(key, value) {
                     return Err(format!("Invalid setting: {key}"));
                 }
@@ -245,6 +253,23 @@ pub async fn action(app: AppHandle, kind: String, id: Value) -> Result<Value, St
             if let Some(target) = id.get("target") {
                 state.view.lock().unwrap()["guideTarget"] = target.clone();
             }
+            if id["activation"] == true {
+                // Exercise the real own-process helper becoming foreground, as WM_SETHOTKEY
+                // does from fullscreen. No synthetic key or polling shortcut opens this guide.
+                let handle = app.clone();
+                tauri::async_runtime::spawn_blocking(move || -> Result<(), String> {
+                    let helper = crate::guide_keys::Activation::new()
+                        .ok_or("Activation helper unavailable")?;
+                    helper.pump();
+                    if !crate::switcher::focus(helper.hwnd) {
+                        return Err("Activation helper did not take foreground".into());
+                    }
+                    crate::match_guide::open_from_activation(&handle, helper.hwnd);
+                    Ok(())
+                })
+                .await
+                .map_err(|e| e.to_string())??;
+            }
             let mut status = json!({});
             if let Some(w) = app.get_webview_window("guide") {
                 if id["close"] == true {
@@ -255,6 +280,19 @@ pub async fn action(app: AppHandle, kind: String, id: Value) -> Result<Value, St
                 }
                 status = json!({"visible":w.is_visible().unwrap_or(false),"maximized":w.is_maximized().unwrap_or(false),"minimized":w.is_minimized().unwrap_or(false),"fullscreen":w.is_fullscreen().unwrap_or(false),"foreground":w.hwnd().ok().is_some_and(|h|unsafe{windows_sys::Win32::UI::WindowsAndMessaging::GetForegroundWindow()==h.0})});
             }
+            let front =
+                unsafe { windows_sys::Win32::UI::WindowsAndMessaging::GetForegroundWindow() };
+            let mut front_pid = 0;
+            unsafe {
+                windows_sys::Win32::UI::WindowsAndMessaging::GetWindowThreadProcessId(
+                    front,
+                    &mut front_pid,
+                );
+            }
+            status["frontPid"] = json!(front_pid);
+            status["appPid"] = json!(std::process::id());
+            status["frontProcess"] = json!(crate::switcher::image_path(front_pid)
+                .and_then(|p| p.file_name().map(|n| n.to_string_lossy().into_owned())));
             return Ok(status);
         }
         _ => return Err("Unknown action".into()),

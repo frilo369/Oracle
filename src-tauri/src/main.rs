@@ -1,7 +1,9 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 mod appearance;
+mod asset_wad;
 mod errorlog;
 mod guide;
+mod guide_assets;
 mod guide_keys;
 mod league;
 mod league_connection;
@@ -19,6 +21,37 @@ use tauri::{
     Manager,
 };
 fn main() {
+    let mut context = tauri::generate_context!();
+    // Disposable QA gets its own instance identity, so it cannot forward commands to the
+    // installed app or touch the player's running session. Forwarded QA launches use this too.
+    let qa_root = std::env::var_os("ORACLE_DATA_DIR")
+        .map(std::path::PathBuf::from)
+        .and_then(|p| p.canonicalize().ok());
+    let workspace = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .unwrap();
+    let qa = qa_root.as_ref().is_some_and(|p| {
+        workspace
+            .join(".test")
+            .canonicalize()
+            .is_ok_and(|allowed| p.starts_with(allowed))
+    }) && std::env::current_exe().ok().is_some_and(|p| {
+        p.starts_with(workspace.join("target")) || p.starts_with(workspace.join(".test"))
+    });
+    if std::env::args().any(|a| a == "--fixture") && !qa {
+        return;
+    }
+    if qa {
+        use std::hash::{Hash, Hasher};
+        let mut hash = std::collections::hash_map::DefaultHasher::new();
+        qa_root
+            .as_ref()
+            .unwrap()
+            .to_string_lossy()
+            .to_ascii_lowercase()
+            .hash(&mut hash);
+        context.config_mut().identifier = format!("com.frilo369.oracle.qa{:x}", hash.finish());
+    }
     let result = tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, args, _| {
             if args.iter().any(|a| a == "--quit") {
@@ -28,6 +61,13 @@ fn main() {
             }
         }))
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
+        .register_asynchronous_uri_scheme_protocol("umbra-icon", |ctx, request, responder| {
+            let app = ctx.app_handle().clone();
+            let label = ctx.webview_label().to_owned();
+            tauri::async_runtime::spawn_blocking(move || {
+                responder.respond(guide_assets::response(&app, &label, &request))
+            });
+        })
         .invoke_handler(tauri::generate_handler![
             shell::ready,
             shell::action,
@@ -92,7 +132,7 @@ fn main() {
             switcher::watch(app.handle().clone());
             Ok(())
         })
-        .build(tauri::generate_context!());
+        .build(context);
     match result {
         Ok(app) => app.run(|app, event| match event {
             tauri::RunEvent::ExitRequested {
@@ -106,10 +146,14 @@ fn main() {
             _ => {}
         }),
         Err(error) => {
-            let root = std::env::var_os("LOCALAPPDATA")
+            let root = std::env::var_os("ORACLE_DATA_DIR")
                 .map(std::path::PathBuf::from)
-                .unwrap_or_default()
-                .join("com.frilo369.oracle");
+                .unwrap_or_else(|| {
+                    std::env::var_os("LOCALAPPDATA")
+                        .map(std::path::PathBuf::from)
+                        .unwrap_or_default()
+                        .join("com.frilo369.oracle")
+                });
             let _ = std::fs::create_dir_all(&root);
             errorlog::note(&root, "startup", &error.to_string());
         }

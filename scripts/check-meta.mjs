@@ -16,6 +16,7 @@ async function until(fn,ms=25000){const end=Date.now()+ms;do{const v=await fn();
 async function port(folder){return until(async()=>{try{return Number((await readFile(join(output,folder,'EBWebView/DevToolsActivePort'),'utf8')).split(/\r?\n/)[0]);}catch{return 0;}});}
 const watchdog=setTimeout(()=>child.kill(),160000);watchdog.unref();
 try {
+  await delay(800);const show=spawn(exe,[],{env,windowsHide:true,stdio:'ignore'});await new Promise(done=>show.once('exit',done));
   dashboardBrowser=await chromium.connectOverCDP(`http://127.0.0.1:${await port('Dashboard-WebView2')}`);
   const dashboard=await until(()=>dashboardBrowser.contexts().flatMap(c=>c.pages()).find(p=>p.url().includes('tauri.localhost')));
   await dashboard.waitForFunction(()=>document.querySelector('#desk-champion').options.length>100);
@@ -32,7 +33,7 @@ try {
       return null;
     }),30000);}catch(e){await page.screenshot({path:join(output,mode+'-failed.png')});throw e;}
     await page.screenshot({path:join(output,mode+'.png')});
-    if(outcome.rendered){assert.equal(outcome.champion,'Ahri');assert.ok(outcome.cards>=4||outcome.augments>50);}
+    if(outcome.rendered){assert.equal(outcome.champion,'Ahri');assert.ok(outcome.cards>=4||outcome.augments>50);const skill=await page.evaluate(()=>[...document.querySelectorAll('#build-section-content h2')].find(h=>h.textContent.includes('Skill Order'))?.closest('section')?.outerHTML||'');await writeFile(join(output,mode+'-skill-source.html'),skill);}
     const denied=await page.evaluate(async()=>{try{await window.__TAURI__.core.invoke('action',{kind:'save-settings',id:{guideHotkey:'F9'}});return false;}catch{return true;}});
     assert.equal(denied,true,'remote pages cannot invoke Oracle commands');
     results.push({mode,...outcome,remoteCommandsDenied:denied});console.log(mode+': '+JSON.stringify(outcome));

@@ -1,11 +1,11 @@
 # Oracle
 
-A Windows system tray companion for League of Legends. Press **F1** in a supported match to open your champion's analytics. Change the key in Settings. Closing Oracle's main window keeps the tray companion running; choose **Quit Oracle** from its tray menu to exit.
+A compact Windows system tray companion for League of Legends. Oracle starts in the tray by default. Click its tray icon to open the control panel. Press **F1** in a supported match for your champion's analytics, or click the shortcut in Overview to change it. Closing the panel keeps Oracle running; choose **Quit Oracle** to exit.
 
-Guides: Summoner's Rift, ARAM and Arena through the inherited themed MetaSRC layout; ARAM Mayhem through the inherited Tencent build guide. Includes a champion browser, favorites and private notes saved on this PC. A guide needs internet for fresh data; Mayhem can reuse previously cached recommendations with their age shown.
+Guides: Summoner's Rift, ARAM and Arena through the inherited themed MetaSRC layout; ARAM Mayhem through the inherited Tencent guide. Overview contains the current match, editable shortcut and manual guide picker, which remembers your last champion and mode. Notebook and Champion Library were removed for this compact redesign. Mayhem skill priorities and detailed upgrade plans sort by highest reported win rate, then pick rate. Mayhem reads artwork and English metadata directly from installed League assets, with cached archive indexes and network fallbacks. Fresh recommendations need internet; cached recommendations show their age.
 
 Run `scripts/cargo.ps1 run` for development. Check with `scripts/verify.ps1`, build with `scripts/build.ps1`, package with `scripts/build-setup.ps1`. Requires Windows x64, Rust/MSVC and WebView2. No Riot API key is needed for local match detection. `scripts/prepare-tools.ps1` reuses the signed runtime bootstrapper and Playwright Core package from the owner's reference for installer and native acceptance checks.
 
-Settings live under `%LOCALAPPDATA%\com.frilo369.oracle`; installation lives under `%LOCALAPPDATA%\oracle\bin`. These are independent of Umbra. Installer upgrades preserve settings and notebook. Oracle never installs skin tooling or modifies League files.
+Settings live under `%LOCALAPPDATA%\com.frilo369.oracle`; installation lives under `%LOCALAPPDATA%\oracle\bin`. These are independent of Umbra. Upgrades preserve preferences and any retired data. The tray default migrates once; a later opt-out is respected. Oracle never installs skin tooling or modifies League files. See `docs/guide-behaviour.md` for the reference opening/focus flow and `docs/validation-1.4.md` for acceptance results.
 
 Independent project by FrYiLo; not affiliated with Riot Games. League artwork belongs to Riot Games. Provider pages and availability are controlled by their owners. See `docs/ideas.md` for proposed future features and `docs/provenance.md` for reused source.

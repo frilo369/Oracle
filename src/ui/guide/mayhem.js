@@ -36,6 +36,7 @@ let currentChampion = Number(
 ), revision = 0, tooltipTarget = null;
 let tooltipTimer = 0, restoringTooltipFocus = false;
 const cachedResponses = /* @__PURE__ */ new Map();
+const chosenSkills = new Map();
 const escape = (value) => String(value ?? "").replace(
   /[&<>"']/g,
   (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char]
@@ -43,7 +44,7 @@ const escape = (value) => String(value ?? "").replace(
 const entry = (kind, id) => resolveGameEntry(catalogue, kind, id);
 const initials = (name) => name.split(/\s+/).slice(0, 2).map((word) => word[0]).join("");
 const guideArt = (kind, item) => artSources(catalogue, kind, item).map((url) =>
-  url.startsWith("./art/") ? `https://raw.communitydragon.org/latest/plugins/rcp-be-lol-game-data/global/default/${url.slice(6)}` : url
+  url.startsWith("./art/") ? `http://umbra-icon.localhost/guide/${url.slice(6)}` : url
 );
 // A picture tries its addresses in order (artSources); the error handler below moves on to the next.
 const art = (item, kind) => {
@@ -155,13 +156,14 @@ function renderEquipment(resetSection) {
 }
 function renderSkills() {
   if (!build) return;
-  const skill = build.skillOrders[Number(skillSelect.value) || 0];
+  const skill = build.skillOrders.find(row => row.priority.join('-') === skillSelect.value) || build.skillOrders[0];
   if (!skill) {
     element("#skills").innerHTML = '<p class="empty">No skill order supplied.</p>';
     return;
   }
   const plan = skill.plans[0];
-  element("#skills").innerHTML = `<div class="skill-summary"><div class="skill-rates">${formatPercent(skill.winRate)} win<span>${formatPercent(skill.pickRate)} pick</span></div></div>${plan ? `<div class="skill-upgrades" aria-label="First ${plan.order.length} skill upgrades reported by Tencent">${plan.order.map((key, index) => `<div class="skill-upgrade"><small>${index + 1}</small><span class="skill-key skill-${key}">${key}</span></div>`).join("")}</div>` : ""}`;
+  skillSelect.title = `Sorted by win rate, then pick rate. Priority: ${formatPercent(skill.winRate)} win · ${formatPercent(skill.pickRate)} pick.`;
+  element("#skills").innerHTML = `<div class="skill-summary"><div class="skill-rates" title="${plan ? 'Shown level-up plan' : 'Skill priority'}">${formatPercent(plan?.winRate ?? skill.winRate)} win<span>${formatPercent(plan?.pickRate ?? skill.pickRate)} pick</span></div></div>${plan ? `<div class="skill-upgrades" aria-label="First ${plan.order.length} skill upgrades reported by Tencent">${plan.order.map((key, index) => `<div class="skill-upgrade"><small>${index + 1}</small><span class="skill-key skill-${key}">${key}</span></div>`).join("")}</div>` : ""}`;
 }
 function renderResponse(response, checking = false) {
   if (response.championId !== currentChampion) return;
@@ -211,13 +213,12 @@ function renderResponse(response, checking = false) {
       `Some new ${[...missing].join(" and ")} names are not available in English game data yet; their IDs are shown explicitly.`
     );
   setNotice([...new Set(messages)], checking);
-  const previousSkill = skillSelect.value;
   skillSelect.innerHTML = build.skillOrders.map(
-    (row, index) => `<option value="${index}">${row.priority.join(" \u2192 ")}</option>`
+    (row, index) => `<option value="${row.priority.join('-')}">${index === 0 ? 'Best · ' : ''}${row.priority.join(" \u2192 ")} · ${formatPercent(row.winRate)} win · ${formatPercent(row.pickRate)} pick</option>`
   ).join("");
   skillSelect.disabled = !build.skillOrders.length;
-  if (Number(previousSkill) < build.skillOrders.length)
-    skillSelect.value = previousSkill || "0";
+  const previousSkill = chosenSkills.get(currentChampion);
+  if (build.skillOrders.some(row => row.priority.join('-') === previousSkill)) skillSelect.value = previousSkill;
   renderAugments();
   renderEquipment();
   renderSkills();
@@ -404,7 +405,7 @@ element("#equipment").addEventListener("change", (event) => {
   renderEquipment("boots");
   element("[data-boots-sort]").focus();
 });
-skillSelect.addEventListener("change", renderSkills);
+skillSelect.addEventListener("change", () => { chosenSkills.set(currentChampion, skillSelect.value); renderSkills(); });
 document.addEventListener(
   "error",
   (event) => {

@@ -233,10 +233,6 @@ pub fn watch(app: AppHandle) {
                 v["guideTarget"] = target;
                 v["detectedChampion"] = json!(tracker.champion);
             }
-            {
-                let mut v = state.view.lock().unwrap();
-                v["hotkeyContext"] = json!(crate::switcher::hotkey_context(&app));
-            }
             crate::match_guide::shortcut(&app, &mut shortcut, &mut registered);
             std::thread::sleep(Duration::from_millis(150));
         }

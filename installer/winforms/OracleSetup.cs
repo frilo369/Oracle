@@ -626,13 +626,13 @@ namespace Oracle.Installer
             {
                 heading = "Update Oracle";
                 primaryText = "Update";
-                SetStatus("Updates Oracle " + installed + " to " + BuildInfo.Version + ". Your settings and notes stay in place.", CreamSoft);
+                SetStatus("Updates Oracle " + installed + " to " + BuildInfo.Version + ". Your preferences stay in place.", CreamSoft);
             }
             else if (found == current)
             {
                 heading = "Reinstall Oracle";
                 primaryText = "Reinstall";
-                SetStatus("Oracle " + installed + " is installed. Reinstalling keeps your settings and notes.", CreamSoft);
+                SetStatus("Oracle " + installed + " is installed. Reinstalling keeps your preferences.", CreamSoft);
             }
             else
             {
@@ -640,7 +640,7 @@ namespace Oracle.Installer
                 primaryText = "Install";
                 SetStatus("Oracle " + installed + " is installed. Installing " + BuildInfo.Version + " replaces it.", Silver);
             }
-            if (running) SetStatus("Oracle is running. Setup closes it first. Your settings and notes stay in place.", Silver);
+            if (running) SetStatus("Oracle is running. Setup closes it first. Your preferences stay in place.", Silver);
             string bin = Path.Combine(options.Root, "bin");
             if (options.Fixture) AppendLog("Verification install into " + bin + ". Nothing outside that folder changes.", LogDim);
             else AppendLog("Oracle " + BuildInfo.Version + " installs to " + bin + ".", LogDim);
@@ -670,9 +670,9 @@ namespace Oracle.Installer
         {
             phase = Phase.Ready;
             heading = "Remove Oracle";
-            SetStatus("Your settings and notes stay on this PC.", CreamSoft);
+            SetStatus("Your preferences stay on this PC.", CreamSoft);
             AppendLog("Removes the Oracle program from " + options.Bin + (options.Fixture ? " (verification install)." : "."), LogDim);
-            AppendLog("Your Oracle settings and notebook stay on this PC.", LogDim);
+            AppendLog("Your Oracle preferences stay on this PC.", LogDim);
             footer = "Ready";
             dotColor = Silver;
             primaryText = "Remove";
@@ -711,7 +711,7 @@ namespace Oracle.Installer
             if (options.Mode == SetupMode.Uninstall)
             {
                 heading = "Oracle is removed";
-                SetStatus("Your settings and notebook are preserved on this PC.", CreamSoft);
+                SetStatus("Your preferences are preserved on this PC.", CreamSoft);
                 footer = "Removed";
                 primaryText = "Close";
                 secondaryVisible = false;

@@ -129,6 +129,24 @@ fn process(hwnd: HWND) -> u32 {
 }
 /// The visible game window. As in 13.7, a process Windows will not name still counts.
 pub(crate) fn game_window() -> HWND {
+    // Disposable acceptance only: never confuse a stand-in with the player's real game.
+    if std::env::args().any(|a| a == "--fixture") {
+        let title: Vec<_> = "Oracle test game".encode_utf16().chain(Some(0)).collect();
+        let fixture = unsafe {
+            windows_sys::Win32::UI::WindowsAndMessaging::FindWindowW(
+                std::ptr::null(),
+                title.as_ptr(),
+            )
+        };
+        if !fixture.is_null()
+            && image_path(process(fixture)).is_some_and(|p| {
+                p.file_name()
+                    .is_some_and(|n| n.eq_ignore_ascii_case("game-fixture.exe"))
+            })
+        {
+            return fixture;
+        }
+    }
     let title: Vec<_> = "League of Legends (TM) Client"
         .encode_utf16()
         .chain(Some(0))
@@ -180,20 +198,67 @@ pub(crate) fn focus(hwnd: HWND) -> bool {
             &mut ignored,
         ) == 0
         {
+            trace_origin(
+                "guide-focus",
+                serde_json::json!({"stage":"unresponsive","error":windows_sys::Win32::Foundation::GetLastError()}),
+            );
             return false;
         }
+        let mut queue_message = windows_sys::Win32::UI::WindowsAndMessaging::MSG::default();
+        windows_sys::Win32::UI::WindowsAndMessaging::PeekMessageW(
+            &mut queue_message,
+            std::ptr::null_mut(),
+            0,
+            0,
+            windows_sys::Win32::UI::WindowsAndMessaging::PM_NOREMOVE,
+        );
         let other = GetWindowThreadProcessId(current, std::ptr::null_mut());
         let own = GetCurrentThreadId();
+        if GetWindowThreadProcessId(hwnd, std::ptr::null_mut()) != own
+            && SendMessageTimeoutW(
+                hwnd,
+                WM_NULL,
+                0,
+                0,
+                SMTO_BLOCK | SMTO_ABORTIFHUNG,
+                50,
+                &mut ignored,
+            ) == 0
+        {
+            return false;
+        }
         if other != 0 && other != own {
             if AttachThreadInput(own, other, 1) == 0 {
+                trace_origin(
+                    "guide-focus",
+                    serde_json::json!({"stage":"attach","error":windows_sys::Win32::Foundation::GetLastError(),"own":own,"other":other}),
+                );
                 return false;
             }
+            let target = GetWindowThreadProcessId(hwnd, std::ptr::null_mut());
+            let linked = target != 0
+                && target != own
+                && target != other
+                && AttachThreadInput(own, target, 1) != 0;
             SetForegroundWindow(hwnd);
+            if linked {
+                AttachThreadInput(own, target, 0);
+            }
             AttachThreadInput(own, other, 0);
         } else {
+            let target = GetWindowThreadProcessId(hwnd, std::ptr::null_mut());
+            let linked = target != 0 && target != own && AttachThreadInput(own, target, 1) != 0;
             SetForegroundWindow(hwnd);
+            if linked {
+                AttachThreadInput(own, target, 0);
+            }
         }
-        GetForegroundWindow() == hwnd
+        let focused = GetForegroundWindow() == hwnd;
+        trace_origin(
+            "guide-focus",
+            serde_json::json!({"stage":"final","focused":focused,"own":own,"other":other,"front":GetForegroundWindow() as usize,"target":hwnd as usize}),
+        );
+        focused
     }
 }
 /// Brings the running game forward. Restoring a minimized game activates it, and in
@@ -232,6 +297,10 @@ pub(crate) fn remember_origin(guide_visible: bool) {
     };
     if let (Some(seen), Ok(mut origin)) = (seen, ORIGIN.lock()) {
         *origin = Some(seen);
+        trace_origin(
+            "guide-origin",
+            serde_json::json!({"handle":seen.0,"pid":seen.1}),
+        );
     }
 }
 /// The player closed the guide: go back to the window it was opened from, as long as
@@ -264,7 +333,22 @@ pub(crate) fn return_to_origin() -> bool {
         if IsIconic(hwnd) != 0 {
             ShowWindowAsync(hwnd, SW_RESTORE);
         }
-        SetForegroundWindow(hwnd) != 0
+        let result = focus(hwnd);
+        trace_origin(
+            "guide-return",
+            serde_json::json!({"handle":handle,"pid":pid,"front":GetForegroundWindow() as usize,"frontPid":process(GetForegroundWindow()),"game":game_window() as usize,"result":result}),
+        );
+        if !result {
+            std::thread::spawn(move || {
+                std::thread::sleep(Duration::from_millis(80));
+                let hwnd = handle as HWND;
+                if IsWindow(hwnd) != 0 && process(hwnd) == pid && GetForegroundWindow() != hwnd {
+                    let focused = focus(hwnd);
+                    trace_origin("guide-return-retry", serde_json::json!({"focused":focused}));
+                }
+            });
+        }
+        true
     }
 }
 fn classify(hwnd: HWND, game: HWND, guide: HWND) -> Option<Window> {
@@ -384,7 +468,7 @@ pub(crate) fn watch(app: AppHandle) {
             if let Some(helper) = &mut activation {
                 if activated || hwnd.is_null() || process(hwnd) == std::process::id() {
                     helper.disarm();
-                } else if !down && hwnd == game {
+                } else if !down {
                     if let Some(word) = keys.activation_word() {
                         helper.arm(word);
                     }
@@ -392,16 +476,22 @@ pub(crate) fn watch(app: AppHandle) {
             }
             if activated {
                 crate::match_guide::open_from_activation(&app, hwnd);
-            } else if down && !key_down && keys.modifiers_down() && hotkey_context(&app) {
+            } else if down && !key_down && keys.modifiers_down() {
                 crate::match_guide::open_from_shortcut(&app);
             }
             key_down = down;
             let key = (hwnd as usize, game as usize, guide as usize);
             if cached.as_ref().is_none_or(|(k, _)| *k != key) {
                 let seen = classify(hwnd, game, guide);
-                if let Some(w) = seen.filter(|w| !matches!(w.kind, Kind::Own | Kind::Switcher)) {
+                if let Some(w) =
+                    seen.filter(|w| !matches!(w.kind, Kind::Own | Kind::Guide | Kind::Switcher))
+                {
                     if let Ok(mut previous) = PREVIOUS.lock() {
                         *previous = Some((w.handle, process(hwnd)));
+                        trace_origin(
+                            "guide-previous",
+                            serde_json::json!({"handle":w.handle,"pid":process(hwnd)}),
+                        );
                     }
                 }
                 cached = Some((key, seen))
@@ -428,33 +518,6 @@ pub(crate) fn watch(app: AppHandle) {
             std::thread::sleep(Duration::from_millis(8));
         }
     });
-}
-pub(crate) fn hotkey_context(app: &AppHandle) -> bool {
-    let front = unsafe { GetForegroundWindow() };
-    if front.is_null() {
-        return false;
-    }
-    if front == game_window() {
-        return true;
-    }
-    if app.state::<crate::shell::Desktop>().preview {
-        let mut text = [0u16; 64];
-        let n = unsafe {
-            windows_sys::Win32::UI::WindowsAndMessaging::GetWindowTextW(
-                front,
-                text.as_mut_ptr(),
-                64,
-            )
-        };
-        if String::from_utf16_lossy(&text[..n.max(0) as usize]) == "Oracle test game" {
-            return true;
-        }
-    }
-    ["guide", "meta-guide"].iter().any(|label| {
-        app.get_webview_window(label)
-            .and_then(|w| w.hwnd().ok())
-            .is_some_and(|h| h.0 == front)
-    })
 }
 #[cfg(test)]
 mod tests {
@@ -510,5 +573,13 @@ mod tests {
     fn deliberate_second_tab_or_later_click_keeps_windows_choice() {
         assert_eq!(replay(Kind::Game, Kind::Riot, true, 2, 15), None);
         assert_eq!(replay(Kind::Guide, Kind::Other, true, 1, 701), None);
+    }
+}
+
+fn trace_origin(kind: &str, value: serde_json::Value) {
+    if std::env::args().any(|a| a == "--fixture") {
+        if let Some(root) = std::env::var_os("ORACLE_DATA_DIR") {
+            crate::support::event(&std::path::PathBuf::from(root), kind, value);
+        }
     }
 }

@@ -1136,3 +1136,6 @@ footer {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* Keep detailed ranked options in a compact header control. */
+.skills-strip > select { width: calc(var(--u) * 170); max-width: calc(var(--u) * 170); }

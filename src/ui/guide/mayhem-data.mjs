@@ -250,6 +250,11 @@ function equipment(value, kind) {
 }
 
 const SKILLS = { 1: 'Q', 2: 'W', 3: 'E', 4: 'R' };
+// Highest reported win rate first; pick rate breaks ties. Missing rates sort last.
+export function sortSkillOrders(orders) {
+  const rate = value => Number.isFinite(value) ? value : -1;
+  return [...orders].sort((a,b) => rate(b.winRate)-rate(a.winRate) || rate(b.pickRate)-rate(a.pickRate));
+}
 function skills(value) {
   return String(value ?? '')
     .split('&')
@@ -297,7 +302,7 @@ export function parseMayhemBuild(response, championId) {
     { id: 'situational', title: 'Other Items', rows: equipment(data.itemone_json, 'situational') },
     { id: 'boots', title: 'Boots', rows: equipment(data.itemshoes, 'boots') },
   ];
-  const skillOrders = rows(data.skill_json).flatMap((row, index) => {
+  const skillOrders = sortSkillOrders(rows(data.skill_json).flatMap((row, index) => {
     const priority = skills(row.qwe);
     return priority.length
       ? [
@@ -306,17 +311,17 @@ export function parseMayhemBuild(response, championId) {
             priority,
             pickRate: percent(row.qwe_s, 'basisPoints'),
             winRate: percent(row.qwe_w, 'basisPoints'),
-            plans: rows(row.sks)
+            plans: sortSkillOrders(rows(row.sks)
               .map((plan) => ({
                 order: skills(plan.sk),
                 pickRate: percent(plan.sk_s, 'basisPoints'),
                 winRate: percent(plan.sk_w, 'basisPoints'),
               }))
-              .filter((plan) => plan.order.length),
+              .filter((plan) => plan.order.length)),
           },
         ]
       : [];
-  });
+  }));
   if (!augments.size && !sections.some((section) => section.rows.length))
     throw new Error('Tencent has no Mayhem build for this champion yet.');
   return {

@@ -172,7 +172,7 @@ namespace Oracle.Installer
                 Registry.CurrentUser.DeleteSubKeyTree(UninstallKey,false);Shortcut(false);
             }
             if(Directory.Exists(Bin)&&Directory.GetFileSystemEntries(Bin).Length==0)Directory.Delete(Bin);
-            Progress(100);Status("Oracle is removed. Your settings and notebook are preserved.");
+            Progress(100);Status("Oracle is removed. Your preferences are preserved.");
         }
         internal int Run(string mode,bool accepted)
         {

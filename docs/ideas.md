@@ -1,6 +1,6 @@
 # Oracle ideas
 
-Implemented in 1.2: automatic champion/mode guides, configurable shortcut, tray controls, optional Windows startup, guide browser, favorite champions, and a private champion notebook.
+Current in 1.4: automatic champion/mode guides, configurable shortcut, tray controls, optional Windows startup and a compact manual guide picker. The owner removed Notebook and Champion Library; keep the product focused and do not reintroduce them without a request. The ideas below are historical proposals, not approved scope.
 
 Ideas for the next versions, pending your choices:
 

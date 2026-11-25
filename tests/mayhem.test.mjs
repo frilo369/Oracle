@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
-import {parseMayhemBuild,parseMayhemRankings,tencentPayload} from '../src/ui/guide/mayhem-data.mjs';
+import {parseMayhemBuild,parseMayhemRankings,tencentPayload,sortSkillOrders} from '../src/ui/guide/mayhem-data.mjs';
 import {readMayhemGuide,saveMayhemGuide} from '../src/ui/guide/mayhem-cache.mjs';
 const build=JSON.parse(readFileSync(new URL('./fixtures/mayhem-annie.json',import.meta.url),'utf8'));
 const ranks=JSON.parse(readFileSync(new URL('./fixtures/mayhem-rankings.json',import.meta.url),'utf8'));
@@ -12,6 +12,20 @@ test('Mayhem renders the bundled wire response and refuses a different champion'
  assert.ok(parsed.sections.every(section=>section.rows.length>0));
  assert.ok(parsed.skillOrders.length>0);
  assert.throws(()=>parseMayhemBuild(build,103),/different champion/);
+});
+test('skill priorities and detailed upgrades choose highest win rate, then pick rate',()=>{
+ const rows=[{id:'popular',winRate:51,pickRate:80},{id:'tie-low',winRate:55,pickRate:10},{id:'best',winRate:55,pickRate:30},{id:'unknown',winRate:null,pickRate:90}];
+ assert.deepEqual(sortSkillOrders(rows).map(r=>r.id),['best','tie-low','popular','unknown']);
+ assert.equal(rows[0].id,'popular','ranking does not mutate provider data');
+ const payload=tencentPayload(build);
+ const variant={...payload,skill_json:JSON.stringify({
+  low:{qwe:'1&2&3',qwe_w:5000,qwe_s:8000,sks:{a:{sk:'1&2&3',sk_w:5000,sk_s:7000}}},
+  high:{qwe:'1&3&2',qwe_w:5500,qwe_s:2000,sks:{a:{sk:'1&3&2',sk_w:5200,sk_s:7000},b:{sk:'3&1&2',sk_w:6000,sk_s:1000},c:{sk:'2&1&3',sk_w:6000,sk_s:2000}}}
+ })};
+ const sorted=parseMayhemBuild(variant,1).skillOrders;
+ assert.deepEqual(sorted[0].priority,['Q','E','W']);
+ assert.deepEqual(sorted[0].plans.map(p=>p.order),[['W','Q','E'],['E','Q','W'],['Q','E','W']]);
+ assert.equal(sorted[0].winRate,55);
 });
 test('Mayhem refuses empty builds, impossible dates and rankings from another date',()=>{
  assert.throws(()=>parseMayhemBuild({dtstatdate:'20261120',itemone_json:'{}'},1),/no Mayhem build/);

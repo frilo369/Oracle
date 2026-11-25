@@ -1,4 +1,10 @@
 use std::{fs, path::PathBuf};
+pub(crate) fn folder() -> PathBuf {
+    folders_for(&crate::procs::list().unwrap_or_default())
+        .into_iter()
+        .find(|path| path.is_dir())
+        .unwrap_or_else(|| r"C:\Riot Games\League of Legends".into())
+}
 pub(crate) fn is_client(name: &str) -> bool {
     matches!(name, "leagueclient.exe" | "leagueclientux.exe")
 }
