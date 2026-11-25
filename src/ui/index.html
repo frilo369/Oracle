@@ -7,9 +7,17 @@
   <script src="appearance.js"></script><script type="module" src="oracle.js"></script>
 </head>
 <body>
+  <svg class="icon-definitions" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><defs>
+    <symbol id="icon-book" viewBox="0 0 32 32"><path d="M16 8C12 4 6 4 2 5v21c5-1 10 0 14 3 4-3 9-4 14-3V5c-4-1-10-1-14 3Zm0 0v21M5 3v20c4 0 7 1 11 3 4-2 7-3 11-3V3"/></symbol>
+    <linearGradient id="icon-metal" x2=".8" y2="1"><stop stop-color="#fbe2b3"/><stop offset=".45" stop-color="#c48e62"/><stop offset="1" stop-color="#805338"/></linearGradient>
+    <symbol id="icon-helm" viewBox="0 0 32 36"><path d="m16 2-3 7-7 4-1 13 6 7V21l5-4 5 4v12l6-7-1-13-7-4-3-7Z" fill="url(#icon-metal)" stroke="#edc99b"/><path d="m6 13 10 4 10-4M16 2v15M9 15l2 6m12-6-2 6" stroke="#674434" stroke-width="1.2"/></symbol>
+    <symbol id="icon-reset" viewBox="0 0 32 32"><path d="M26 12A11 11 0 1 0 27 22M26 4v8h-8"/></symbol>
+    <symbol id="icon-power" viewBox="0 0 32 32"><path d="M16 2v14M9 6a13 13 0 1 0 14 0"/></symbol>
+    <symbol id="icon-tray" viewBox="0 0 32 32"><path d="M16 3v17m-6-6 6 6 6-6M4 20v7h24v-7"/></symbol>
+  </defs></svg>
   <div class="app">
     <header class="titlebar" data-tauri-drag-region>
-      <div class="identity" data-tauri-drag-region><img src="oracle.png" alt=""><h1 data-tauri-drag-region>Oracle</h1><span id="version" data-tauri-drag-region></span></div>
+      <div class="identity" data-tauri-drag-region><img src="oracle-mark.svg" alt="" data-tauri-drag-region><span class="identity-divider" aria-hidden="true"></span><h1 data-tauri-drag-region>Oracle</h1><span id="version" data-tauri-drag-region></span></div>
       <div class="window-actions"><button data-action="minimize" aria-label="Minimize" title="Minimize">−</button><button data-action="hide" aria-label="Close to tray" title="Close to tray">×</button></div>
     </header>
     <nav aria-label="Main navigation"><button class="active" data-tab="overview" aria-selected="true">Overview</button><button data-tab="settings" aria-selected="false">Settings</button></nav>
@@ -17,11 +25,11 @@
       <div id="app-error" class="error-banner" role="alert" hidden><span></span><button id="dismiss-error" aria-label="Dismiss error">×</button></div>
       <section id="overview" class="page" aria-label="Overview">
         <section class="match-card framed" aria-label="Current match">
-          <div class="match-identity"><div class="portrait"><img id="match-icon" src="oracle.png" alt=""></div><div class="match-copy"><span id="connection" class="connection">Waiting for League</span><h2 id="match-champion">No active match</h2><p id="match-detail">Your champion connects automatically.</p></div><span class="live-mark" id="live-mark" hidden>LIVE</span></div>
-          <button id="open-current" class="primary full" disabled>Open match guide</button>
+          <div class="match-identity"><div class="portrait-column"><div class="portrait"><img id="match-icon" src="oracle-portrait.svg" alt=""></div></div><div class="match-copy"><span id="connection" class="connection">Waiting for League</span><h2 id="match-champion">No active match</h2><p id="match-detail">Your champion connects automatically.</p></div><span class="live-mark" id="live-mark" hidden>LIVE</span></div>
+          <button id="open-current" class="primary full" disabled><span class="button-glint" aria-hidden="true"></span>Open match guide</button>
         </section>
-        <section class="shortcut-card framed" aria-label="Guide shortcut"><div><h3>Guide shortcut</h3><p id="shortcut-state">Click the key to change it.</p></div><button id="record-key" class="shortcut-key" title="Change shortcut">F1</button><button id="reset-key" class="icon-button" title="Reset to F1" aria-label="Reset shortcut to F1">↺</button></section>
-        <section class="browse-card framed" aria-labelledby="browse-heading"><div class="section-heading"><h3 id="browse-heading">Browse guides</h3><span id="provider-label">MetaSRC</span></div><div class="guide-picker"><label>Champion<select id="desk-champion" aria-label="Guide champion"></select></label><label>Mode<select id="desk-mode" aria-label="Guide mode"><option value="rift">Summoner’s Rift</option><option value="aram">ARAM</option><option value="arena">Arena</option><option value="mayhem">ARAM: Mayhem</option></select></label><button id="open-guide" class="secondary">Open</button></div></section>
+        <section class="shortcut-card framed" aria-label="Guide shortcut"><svg class="section-icon" aria-hidden="true"><use href="#icon-book"/></svg><div><h3>Guide shortcut</h3><p id="shortcut-state">Click the key to change it.</p></div><button id="record-key" class="shortcut-key" title="Change shortcut">F1</button><span class="control-divider" aria-hidden="true"></span><button id="reset-key" class="icon-button" title="Reset to F1" aria-label="Reset shortcut to F1"><svg aria-hidden="true"><use href="#icon-reset"/></svg></button></section>
+        <section class="browse-card framed" aria-labelledby="browse-heading"><div class="section-heading"><svg class="section-icon" aria-hidden="true"><use href="#icon-helm"/></svg><h3 id="browse-heading">Browse guides</h3><span id="provider-label">MetaSRC</span></div><div class="guide-picker"><label>Champion<select id="desk-champion" aria-label="Guide champion"></select></label><label>Mode<select id="desk-mode" aria-label="Guide mode"><option value="rift">Summoner’s Rift</option><option value="aram">ARAM</option><option value="arena">Arena</option><option value="mayhem">ARAM: Mayhem</option></select></label><button id="open-guide" class="secondary ruby-button">Open</button></div></section>
       </section>
       <section id="settings" class="page" aria-label="Settings" hidden>
         <section class="settings-card framed" aria-label="Startup preferences"><label class="setting-row"><div><strong>Open directly in the tray</strong><p>Show Oracle when you need it.</p></div><input id="launch-tray" type="checkbox" role="switch" checked><span class="switch" aria-hidden="true"></span></label><label class="setting-row"><div><strong>Start with Windows</strong><p>Launch quietly when you sign in.</p></div><input id="start-windows" type="checkbox" role="switch"><span class="switch" aria-hidden="true"></span></label></section>
@@ -30,7 +38,7 @@
         <section class="settings-card framed updates-card" aria-label="Updates"><div class="setting-row"><div><strong>Oracle updates</strong><p id="update-status" role="status">Updates install automatically at startup, outside a match.</p></div><button id="check-updates" class="secondary">Check for updates</button></div></section>
       </section>
     </main>
-    <footer><button class="text-button quit" data-action="quit">Quit Oracle</button><button class="tray-button" data-action="hide">Hide to tray</button></footer>
+    <footer><button class="text-button quit" data-action="quit"><svg aria-hidden="true"><use href="#icon-power"/></svg>Quit Oracle</button><button class="tray-button" data-action="hide"><svg aria-hidden="true"><use href="#icon-tray"/></svg>Hide to tray</button></footer>
   </div><div id="toast" class="toast" role="status" hidden></div>
 </body>
 </html>

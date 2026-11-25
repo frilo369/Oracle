@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120">
+  <defs>
+    <linearGradient id="gold" x2=".7" y2="1"><stop stop-color="#fff4d8"/><stop offset=".28" stop-color="#eac795"/><stop offset=".5" stop-color="#9b6945"/><stop offset=".72" stop-color="#edc488"/><stop offset="1" stop-color="#b77b47"/></linearGradient>
+    <radialGradient id="ruby" cx=".35" cy=".22" r=".75"><stop stop-color="#ffe5ca"/><stop offset=".12" stop-color="#ffa59b"/><stop offset=".35" stop-color="#f52d49"/><stop offset=".7" stop-color="#c1072d"/><stop offset="1" stop-color="#480b1c"/></radialGradient>
+    <radialGradient id="ground"><stop stop-color="#2b141b"/><stop offset="1" stop-color="#090a0f"/></radialGradient>
+  </defs>
+  <circle cx="60" cy="60" r="52" fill="url(#ground)" stroke="url(#gold)" stroke-width="3.4"/>
+  <circle cx="60" cy="60" r="48" fill="none" stroke="#7a543b" stroke-width=".8"/>
+  <path d="m60 26 47 34-47 34-47-34Z" fill="#100d12" stroke="url(#gold)" stroke-width="4"/>
+  <path d="M18 60c28-21 56-21 84 0-28 21-56 21-84 0Z" fill="#29121c" stroke="url(#gold)" stroke-width="2"/>
+  <path d="M60 26c-2 9-7 14-12 18m12 50c-2-9-7-14-12-18" fill="none" stroke="#efcea0" stroke-width="1"/>
+  <circle cx="60" cy="60" r="16.5" fill="url(#ruby)" stroke="#ffcc9f" stroke-width="1.3"/>
+  <path d="M50 49c5-3 10-4 16-1" fill="none" stroke="#ffe5d2" stroke-linecap="round" stroke-width="1.8" opacity=".8"/>
+</svg>

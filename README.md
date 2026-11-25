@@ -1,6 +1,6 @@
 # Oracle
 
-A compact Windows system tray companion for League of Legends. Oracle starts in the tray by default. Click its tray icon to open the control panel. Press **F1** in a supported match for your champion's analytics, or click the shortcut in Overview to change it. Closing the panel keeps Oracle running; choose **Quit Oracle** to exit.
+A Windows system tray companion for League of Legends. Oracle starts in the tray by default. Click its tray icon to open the control panel. Press **F1** in a supported match for your champion's analytics, or click the shortcut in Overview to change it. Closing the panel keeps Oracle running; choose **Quit Oracle** to exit.
 
 Download the Windows installer from [the latest Oracle release](https://github.com/frilo369/Oracle/releases/latest). Install version 1.8 once to enable automatic updates from that version onward.
 
@@ -15,5 +15,7 @@ Settings live under `%LOCALAPPDATA%\com.frilo369.oracle`; installation lives und
 Version 1.7 reduces dashboard refresh data by about 99%, skips unchanged paints and stops dashboard polling while hidden or minimized. It refreshes immediately when shown. Mayhem search reuses loaded artwork while filtering. See `docs/validation-1.7.md` for measurements and validation limits.
 
 Version 1.8 adds automatic startup updates, the Settings update check, verified GitHub downloads and installer wait/restart handling. See `docs/validation-1.8.md` for acceptance results and the release workflow.
+
+Version 1.9 recreates the owner's dashboard reference with gold frames, ruby controls and eclipse/portal artwork. Overview and Settings share the new design. The default window is 1040×780 and scales down to 720×570. `node scripts/check-design.mjs` checks native layouts and controls; see `docs/ui-redesign-1.9.md` for screenshots, artwork provenance and verification.
 
 Independent project by FrYiLo; not affiliated with Riot Games. League artwork belongs to Riot Games. Provider pages and availability are controlled by their owners. See `docs/ideas.md` for proposed future features and `docs/provenance.md` for reused source.

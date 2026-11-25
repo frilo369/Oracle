@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120">
+  <defs>
+    <linearGradient id="gold" x1="0" y1="0" x2=".8" y2="1"><stop stop-color="#fff2ce"/><stop offset=".26" stop-color="#e7ba80"/><stop offset=".48" stop-color="#956744"/><stop offset=".68" stop-color="#f8d59c"/><stop offset="1" stop-color="#b57d4e"/></linearGradient>
+    <radialGradient id="jewel" cx=".34" cy=".22" r=".8"><stop stop-color="#fff0c8"/><stop offset=".12" stop-color="#ffb0a1"/><stop offset=".32" stop-color="#fa3653"/><stop offset=".65" stop-color="#ae092d"/><stop offset="1" stop-color="#370515"/></radialGradient>
+    <radialGradient id="ground"><stop stop-color="#23151b"/><stop offset="1" stop-color="#09090d"/></radialGradient>
+  </defs>
+  <path d="M60 5C83 13 105 34 115 60 105 86 83 107 60 115 37 107 15 86 5 60 15 34 37 13 60 5Z" fill="url(#ground)" stroke="url(#gold)" stroke-width="3"/>
+  <path d="M60 17C80 23 97 41 105 60 97 79 80 97 60 103 40 97 23 79 15 60 23 41 40 23 60 17Z" fill="none" stroke="#74513a" stroke-width="1"/>
+  <path d="M60 23c6 12 25 25 44 37-19 12-38 25-44 37-6-12-25-25-44-37 19-12 38-25 44-37Z" fill="#09090c" stroke="url(#gold)" stroke-width="3.6"/>
+  <path d="M20 60c27-20 53-20 80 0-27 20-53 20-80 0Z" fill="#32121b" stroke="url(#gold)" stroke-width="2.8"/>
+  <circle cx="60" cy="60" r="16" fill="url(#jewel)" stroke="#ffd1a0" stroke-width="1.4"/>
+  <path d="M50 49c5-4 12-4 17 0" fill="none" stroke="#ffd2ac" stroke-width="2" stroke-linecap="round" opacity=".7"/>
+</svg>

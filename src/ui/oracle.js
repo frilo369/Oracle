@@ -27,7 +27,7 @@ function paint(){
   const connected=state.leagueConnected||state.phase==='InProgress'||!!champion;
   $('#connection').textContent=connected?'League connected':'Waiting for League';$('#connection').classList.toggle('connected',connected);
   $('#match-champion').textContent=champion?.name||'No active match';$('#match-detail').textContent=champion?modes[target.mode]:state.detectedChampion?'Choose the mode below.':'Your champion connects automatically.';
-  const art=champion?.icon&&!failedPortraits.has(champion.icon)?champion.icon:'oracle.png';if($('#match-icon').getAttribute('src')!==art)$('#match-icon').src=art;
+  const art=champion?.icon&&!failedPortraits.has(champion.icon)?champion.icon:'oracle-portrait.svg';if($('#match-icon').getAttribute('src')!==art)$('#match-icon').src=art;
   $('#live-mark').hidden=!champion;$('#open-current').disabled=!target;
   $('#start-windows').checked=settings.startWithWindows;$('#launch-tray').checked=settings.launchInTray;$('#enable-key').checked=!!settings.guideHotkey;
   if(document.activeElement!==$('#accent-colour'))$('#accent-colour').value=settings.assetColour;
@@ -59,7 +59,7 @@ async function init(){
   window.addEventListener('blur',()=>capture(false).catch(error));
   for(const [id,key]of [['start-windows','startWithWindows'],['launch-tray','launchInTray']])$('#'+id).addEventListener('change',e=>change({[key]:e.target.checked}).catch(e=>{paint();error(e);}));
   $('#accent-colour').addEventListener('input',e=>window.UmbraAppearance?.apply('umbra',e.target.value));$('#accent-colour').addEventListener('change',e=>change({assetColour:e.target.value}).catch(e=>{appliedColour=undefined;paint();error(e);}));$('#reset-colour').addEventListener('click',()=>change({assetColour:'#ae1236'}).catch(error));
-  $('#dismiss-error').addEventListener('click',()=>invoke('dismiss-error').then(v=>{state.error=v.error;paint();}).catch(error));$('#match-icon').addEventListener('error',()=>{const icon=$('#match-icon');if(!icon.src.endsWith('/oracle.png')){failedPortraits.add(icon.getAttribute('src'));icon.src='oracle.png';}});
+  $('#dismiss-error').addEventListener('click',()=>invoke('dismiss-error').then(v=>{state.error=v.error;paint();}).catch(error));$('#match-icon').addEventListener('error',()=>{const icon=$('#match-icon');if(!icon.src.endsWith('/oracle-portrait.svg')){failedPortraits.add(icon.getAttribute('src'));icon.src='oracle-portrait.svg';}});
   await window.__TAURI__.event.listen('oracle-error',({payload})=>error(payload));
   await window.__TAURI__.event.listen('oracle-update',({payload})=>paintUpdate(payload));
   $('#check-updates').addEventListener('click',async()=>{const button=$('#check-updates');button.disabled=true;try{paintUpdate((await invoke('check-updates')).update);}catch(e){button.disabled=false;error(e);}});

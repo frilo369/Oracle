@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="520" height="56" viewBox="0 0 520 56" preserveAspectRatio="none">
+  <defs><linearGradient id="gold" x2=".8" y2="1"><stop stop-color="#ffe1a6"/><stop offset=".4" stop-color="#bc8658"/><stop offset=".7" stop-color="#7e4b38"/><stop offset="1" stop-color="#e5b77b"/></linearGradient><linearGradient id="glint"><stop stop-color="#ff234b" stop-opacity="0"/><stop offset=".5" stop-color="#ffe3d4"/><stop offset="1" stop-color="#ff234b" stop-opacity="0"/></linearGradient><filter id="glow" x="-.1" y="-3" width="1.2" height="7"><feGaussianBlur stdDeviation="2"/></filter></defs>
+  <path d="M17 1H503L519 28 503 55H17L1 28Z" fill="none" stroke="url(#gold)" stroke-width="1.8"/>
+  <path d="M20 5H500L514 28 500 51H20L6 28Z" fill="none" stroke="#b92e39" stroke-width="1.5"/>
+  <path d="M22 6H498M22 50H498" fill="none" stroke="#ff4b56" stroke-width=".7" opacity=".7"/>
+  <path d="M40 5H480" fill="none" stroke="url(#glint)" stroke-width="2" filter="url(#glow)"/>
+  <path d="M40 5H480" fill="none" stroke="url(#glint)" stroke-width="1.2"/>
+</svg>

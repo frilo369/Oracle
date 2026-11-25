@@ -59,8 +59,8 @@ pub fn show_dashboard(app: &AppHandle) -> Result<(), String> {
             let w =
                 WebviewWindowBuilder::new(app, "dashboard", WebviewUrl::App("index.html".into()))
                     .title("Oracle")
-                    .inner_size(580., 610.)
-                    .min_inner_size(520., 570.)
+                    .inner_size(1040., 780.)
+                    .min_inner_size(720., 570.)
                     .center()
                     .decorations(false)
                     .background_color(crate::match_guide::GROUND)
@@ -330,6 +330,22 @@ pub async fn action(app: AppHandle, kind: String, id: Value) -> Result<Value, St
             }
             if let Some(scenario) = id["updateScenario"].as_str() {
                 crate::update::fixture(&state, scenario)?;
+            }
+            if let Some(size) = id["dashboardSize"].as_array() {
+                let width = size
+                    .first()
+                    .and_then(Value::as_u64)
+                    .filter(|n| (720..=1600).contains(n))
+                    .ok_or("Invalid fixture width")?;
+                let height = size
+                    .get(1)
+                    .and_then(Value::as_u64)
+                    .filter(|n| (570..=1100).contains(n))
+                    .ok_or("Invalid fixture height")?;
+                app.get_webview_window("dashboard")
+                    .ok_or("Dashboard unavailable")?
+                    .set_size(tauri::LogicalSize::new(width as f64, height as f64))
+                    .map_err(|e| e.to_string())?;
             }
             if let Some(target) = id.get("target") {
                 state.view.lock().unwrap()["guideTarget"] = target.clone();
