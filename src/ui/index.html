@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en" data-theme="umbra">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="dark">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://raw.communitydragon.org; connect-src 'self' ipc: http://ipc.localhost; object-src 'none'; frame-src 'none'; base-uri 'self'">
+  <title>Oracle</title><link rel="icon" href="oracle.png"><link rel="stylesheet" href="appearance.css"><link rel="stylesheet" href="oracle.css">
+  <script src="appearance.js"></script><script type="module" src="oracle.js"></script>
+</head>
+<body>
+  <div class="app">
+    <header class="titlebar" data-tauri-drag-region>
+      <div class="title-identity" data-tauri-drag-region><img src="oracle.png" alt=""><span data-tauri-drag-region>ORACLE <i>LEAGUE COMPANION</i></span></div>
+      <div class="window-actions"><button data-action="minimize" aria-label="Minimize">−</button><button data-action="maximize" aria-label="Maximize or restore">□</button><button data-action="hide" aria-label="Close to system tray" title="Close to tray">×</button></div>
+    </header>
+    <aside class="sidebar">
+      <div class="brand"><img src="oracle.png" alt=""><h1>ORACLE</h1><span>A LITTLE FORESIGHT.</span></div>
+      <img class="divider" src="lobby/divider.webp" alt="">
+      <nav aria-label="Main navigation">
+        <button class="nav active" data-tab="overview"><span class="nav-icon">◈</span>Overview</button>
+        <button class="nav" data-tab="library"><span class="nav-icon">♜</span>Champion library</button>
+        <button class="nav" data-tab="notebook"><span class="nav-icon">▤</span>Notebook</button>
+        <button class="nav" data-tab="settings"><span class="nav-icon">⚙</span>Settings</button>
+      </nav>
+      <div class="sidebar-bottom"><div class="tray-emblem">◌</div><strong>Always within reach</strong><p>Close the window.<br>Oracle stays in your tray.</p><span id="version">VERSION 1.0</span></div>
+    </aside>
+    <main>
+      <div id="app-error" class="error-banner" role="alert" hidden><span></span><button id="dismiss-error" aria-label="Dismiss error">×</button></div>
+      <section id="overview" class="page active" aria-labelledby="overview-heading">
+        <div class="page-heading"><div><span class="eyebrow">YOUR EDGE, ON DEMAND</span><h2 id="overview-heading">The next play starts here.</h2></div><span id="connection" class="connection">Waiting for League</span></div>
+        <section class="hero framed">
+          <div class="hero-copy"><span class="eyebrow">LESS SEARCHING. MORE PLAYING.</span><h3>Insight,<br><em>one key away.</em></h3><p>Your champion. Your mode. The builds you need,<br>ready when you are.</p><button class="primary" id="open-current" disabled>Open match guide</button><span id="current-caption" class="hero-caption">Start a match to connect automatically.</span></div>
+          <div class="key-shrine"><div class="orbit orbit-one"></div><div class="orbit orbit-two"></div><div class="keycap" id="hero-key">F1</div><span>YOUR GUIDE SHORTCUT</span><button class="text-button" data-go="settings">Change shortcut</button></div>
+          <div class="hero-footer"><span id="match-state">Waiting for your next match</span><span>RIFT <b>·</b> ARAM <b>·</b> ARENA <b>·</b> MAYHEM</span></div>
+        </section>
+        <section class="build-desk framed" aria-labelledby="desk-heading"><div class="section-heading"><div><span class="eyebrow">PREPARE BEFORE YOU QUEUE</span><h3 id="desk-heading">The build desk</h3></div><span class="subtle">Explore any champion, any time.</span></div>
+          <div class="desk-controls"><label>Champion<select id="desk-champion" aria-label="Guide champion"></select></label><label>Game mode<select id="desk-mode"><option value="rift">Summoner’s Rift</option><option value="aram">ARAM</option><option value="arena">Arena</option><option value="mayhem">ARAM: Mayhem</option></select></label><button id="open-guide" class="primary">Explore guide</button><button id="favorite" class="favorite-button" aria-label="Favorite this champion" title="Favorite champion">☆</button></div>
+          <div class="desk-footer"><span id="provider-label">Builds & statistics from MetaSRC</span><span>Opens in Oracle’s guide window</span></div>
+        </section>
+        <div class="overview-bottom"><div><span class="eyebrow">YOUR CHAMPION POOL</span><div id="favorite-chips" class="favorite-chips"></div></div><button class="notebook-prompt" data-go="notebook"><span>▤</span><div><strong>Keep what you learn.</strong><small>A private notebook for every champion.</small></div><span class="tiny-diamond">◇</span></button></div>
+      </section>
+      <section id="library" class="page" aria-labelledby="library-heading" hidden><div class="page-heading"><div><span class="eyebrow">KNOW YOUR CHAMPION</span><h2 id="library-heading">Champion library</h2></div><span id="champion-count" class="subtle"></span></div><div class="library-tools"><label class="search-field"><span>⌕</span><input id="champion-search" type="search" placeholder="Find a champion…" aria-label="Search champions"></label><button id="favorites-only" class="secondary" aria-pressed="false">☆ Favorites</button></div><div id="champion-grid" class="champion-grid"></div><p id="no-champions" class="empty" hidden>No champions match your search.</p></section>
+      <section id="notebook" class="page" aria-labelledby="notebook-heading" hidden><div class="page-heading"><div><span class="eyebrow">SMALL NOTES. BETTER GAMES.</span><h2 id="notebook-heading">Your champion notebook</h2></div><span class="subtle">Saved on this PC</span></div><div class="notebook framed"><div class="note-heading"><label>Champion<select id="note-champion"></select></label><span id="note-state" role="status">No saved note</span></div><label for="note-text" class="note-label">What do you want to remember?</label><textarea id="note-text" maxlength="2000" placeholder="A matchup to respect. A build that worked. One thing to do better next game…"></textarea><div class="note-footer"><span id="note-count">0 / 2000</span><button id="save-note" class="primary">Save note</button></div></div><p class="privacy-note">Your observations stay in Oracle. Notes are never sent to a guide provider.</p></section>
+      <section id="settings" class="page" aria-labelledby="settings-heading" hidden><div class="page-heading"><div><span class="eyebrow">MAKE IT YOURS</span><h2 id="settings-heading">Settings</h2></div><span class="subtle">Changes save immediately</span></div>
+        <section class="settings-card framed"><h3>The guide shortcut</h3><div class="setting-row"><div><strong>Open analytics in game</strong><p>Press a function key, or combine a key with Ctrl, Alt or Shift.<br>Escape cancels recording.</p></div><button id="record-key" class="shortcut-button">F1 <span>Change</span></button></div><div class="shortcut-footer"><span id="shortcut-state">Active while League’s game window is in front.</span><button id="reset-key" class="text-button">Reset to F1</button><button id="disable-key" class="text-button">Disable</button></div><p id="capture-hint" role="status" hidden>Press your new shortcut…</p></section>
+        <section class="settings-card framed"><h3>Quietly in the background</h3><label class="setting-row"><div><strong>Start with Windows</strong><p>Launch Oracle quietly in the system tray when you sign in.</p></div><input id="start-windows" type="checkbox" role="switch"><span class="switch" aria-hidden="true"></span></label><label class="setting-row"><div><strong>Open directly in the tray</strong><p>Keep the main window hidden when you launch Oracle.</p></div><input id="launch-tray" type="checkbox" role="switch"><span class="switch" aria-hidden="true"></span></label></section>
+        <section class="settings-card framed"><h3>A familiar atmosphere</h3><div class="setting-row"><div><strong>Asset colour</strong><p>Silver frames, a jewel accent, and the original eclipse backdrop.</p></div><input id="accent-colour" type="color" aria-label="Asset colour" value="#ae1236"><button id="reset-colour" class="text-button">Reset</button></div></section>
+        <div class="about-line"><span>ORACLE <small>by FrYiLo</small></span><button class="text-button" data-action="quit">Quit Oracle</button></div>
+      </section>
+      <footer class="statusbar"><span><i id="status-dot"></i><span id="status-label">Oracle is ready in your tray</span></span><span>Independent League companion</span></footer>
+    </main>
+  </div><div id="toast" class="toast" role="status" hidden></div>
+</body>
+</html>

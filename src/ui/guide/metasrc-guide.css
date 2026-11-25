@@ -1,0 +1,871 @@
+/* MetaSRC pages (ARAM, Arena, Rift). The banner, card headers, augment lists
+   and the --u size unit come from mayhem.css; colours from guide-theme.css. */
+[aria-busy='true'] {
+  cursor: progress;
+  box-shadow: inset 0 0 0 1px var(--gold);
+}
+:host {
+  --item-size: calc(var(--u) * 44);
+  overflow: auto;
+}
+:host(.named-items) {
+  --item-size: calc(var(--u) * 34);
+}
+:host(.mode-rift) .guide,
+:host(.mode-aram) .guide,
+:host(.mode-rift) #guide-content,
+:host(.mode-aram) #guide-content {
+  flex: 1 0 auto;
+}
+.guide {
+  padding-top: calc(var(--u) * 8);
+}
+#guide-content {
+  display: flex;
+  flex-direction: column;
+}
+
+/* Build-type row under the banner */
+.meta-build-toolbar {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: calc(var(--u) * 10);
+  padding: calc(var(--u) * 7) var(--page-gap) 0;
+}
+#meta-build-styles {
+  display: flex;
+  gap: calc(var(--u) * 5);
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+#meta-build-styles button {
+  display: flex;
+  align-items: center;
+  flex: none;
+  gap: calc(var(--u) * 5);
+  height: calc(var(--u) * 28);
+  border: 1px solid var(--rim);
+  border-radius: calc(var(--u) * 5);
+  padding: 0 calc(var(--u) * 7);
+  font-size: var(--fs-s);
+}
+#meta-build-styles .meta-art {
+  width: calc(var(--u) * 20);
+  height: calc(var(--u) * 20);
+}
+#meta-build-styles small {
+  font-size: var(--fs-s);
+  color: #e6d397;
+}
+#meta-item-names {
+  flex: none;
+  margin-left: auto;
+  height: calc(var(--u) * 28);
+  border: 1px solid var(--rim);
+  border-radius: calc(var(--u) * 5);
+  padding: 0 calc(var(--u) * 10);
+  font-size: var(--fs-s);
+}
+
+/* Cards and item tiles */
+.meta-card {
+  border: 1px solid var(--rim);
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+.meta-art {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: var(--item-size);
+  height: var(--item-size);
+  border-radius: calc(var(--u) * 3);
+}
+.meta-art img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+.meta-stack-count {
+  position: absolute;
+  right: calc(var(--u) * -2);
+  bottom: calc(var(--u) * -2);
+  border: 1px solid #998553;
+  background: var(--ground);
+  color: white;
+  font:
+    600 var(--fs-xs) 'Segoe UI',
+    sans-serif;
+  padding: 0 calc(var(--u) * 2);
+  line-height: 1.1;
+}
+/* One row of tiles. Tiles in a row share its height: icons sit on the top
+   edge and rates on the bottom edge, so both line up across the card. */
+.meta-choices {
+  display: grid;
+  flex: 1;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, max-content);
+  align-content: center;
+  justify-content: space-evenly;
+  gap: calc(var(--u) * 8);
+  min-width: 0;
+  padding: calc(var(--u) * 8) calc(var(--u) * 10);
+}
+.meta-choices > .empty {
+  padding: 0;
+  text-align: center;
+}
+.meta-choice {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  gap: calc(var(--u) * 6);
+  min-width: 0;
+}
+.meta-choice-icons {
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  gap: calc(var(--u) * 4);
+}
+.meta-choice-rates {
+  display: grid;
+  grid-template-columns: auto auto;
+  justify-content: center;
+  gap: calc(var(--u) * 1) calc(var(--u) * 5);
+  font-size: var(--fs-s);
+  line-height: 1.25;
+  white-space: nowrap;
+}
+.meta-rate {
+  display: contents;
+}
+.meta-rate-label {
+  color: var(--muted-ink);
+  text-align: right;
+}
+.meta-choice-rates strong {
+  color: var(--shine);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  text-align: left;
+}
+.meta-choice-rates small {
+  grid-column: 1/-1;
+  color: var(--muted-ink);
+  font-size: var(--fs-xs);
+  text-align: center;
+}
+.meta-item-label {
+  display: none;
+  box-sizing: border-box;
+  width: 100%;
+  padding-inline: calc(var(--u) * 2);
+  font:
+    var(--fs-xs) / 1.2 'Segoe UI',
+    sans-serif;
+  color: var(--shine);
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+.meta-named-item {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: calc(var(--u) * 4);
+  min-width: 0;
+}
+:host(.named-items) .meta-item-label {
+  display: block;
+  min-height: 2.4em;
+}
+:host(.named-items) .meta-named-item,
+:host(.named-items) .meta-purchase {
+  width: calc(var(--u) * 74);
+}
+/* With names on, every tile is taller: tighten the spacing so the page still
+   fits the window. */
+:host(.named-items) .meta-choice {
+  gap: calc(var(--u) * 4);
+}
+:host(.named-items) .meta-named-item {
+  gap: calc(var(--u) * 3);
+}
+/* Cards that sit in one row grow with their tile count (--n), and their tiles
+   split the card evenly, so tiles are the same width in every card. */
+.meta-option {
+  flex: var(--n, 1) 1 calc(var(--u) * 20);
+}
+.meta-option > .meta-choices {
+  grid-auto-columns: minmax(0, 1fr);
+  justify-content: stretch;
+  gap: 0;
+}
+/* In these cards a name gets the whole width of its tile. */
+:host(.named-items) .meta-option .meta-named-item,
+:host(.named-items) .meta-recommended-round .meta-named-item {
+  width: 100%;
+}
+:host(.named-items) .meta-option > .meta-choices {
+  padding-inline: calc(var(--u) * 4);
+  container-type: inline-size;
+}
+/* Each of the card's --n tiles is 100cqi / n wide. A tile too narrow for a
+   long one-word name (Morellonomicon) gets smaller text rather than a word
+   broken in two. */
+:host(.named-items) .meta-option .meta-item-label {
+  font-size: clamp(8.5px, calc(14cqi / var(--n, 1)), var(--fs-xs));
+}
+
+/* With names on, a tile wide enough sets its rates on one line ("Win 51%
+   Buy 6%", "Buy 69% 47K games"); a narrow one wraps a whole pair at a time. */
+:host(.named-items) .meta-starting .meta-choice-rates,
+:host(.named-items) .meta-arena-side .meta-card:not(.meta-prismatic-sheet) .meta-choice-rates {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: baseline;
+  gap: 0 calc(var(--u) * 8);
+}
+:host(.named-items) .meta-starting .meta-rate,
+:host(.named-items) .meta-arena-side .meta-rate {
+  display: inline-flex;
+  align-items: baseline;
+  gap: calc(var(--u) * 5);
+}
+
+/* ARAM and Rift: three rows of cards that share the page height */
+.meta-standard {
+  flex: 1 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+}
+/* Each row starts at the height of its content; spare page height is shared
+   between the rows, so the page only scrolls when the content cannot fit. */
+.meta-row {
+  display: flex;
+  flex: 1 0 auto;
+  gap: var(--gap);
+  min-width: 0;
+}
+.meta-standard > .meta-row-top {
+  flex-grow: 1.3;
+}
+.meta-row-top > * {
+  flex: 1 1 0;
+}
+.meta-row-top > .meta-skills {
+  flex-grow: 1.25;
+}
+.meta-essentials {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+  min-width: 0;
+}
+.meta-essentials > .meta-card {
+  flex: 1 0 auto;
+}
+.meta-spells,
+.meta-starting {
+  --item-size: calc(var(--u) * 36);
+}
+:host(.named-items) .meta-spells,
+:host(.named-items) .meta-starting {
+  --item-size: calc(var(--u) * 28);
+}
+/* These two cards set the height of the top row, and their tiles already share
+   one height, so a second empty name line would only cost space. */
+:host(.named-items) .meta-essentials .meta-item-label {
+  min-height: 0;
+}
+/* These cards have room to spare across: a tile widens to keep its name on
+   one line (Hextech Alternator) rather than adding a line to the row. */
+:host(.named-items) .meta-essentials .meta-named-item {
+  width: auto;
+  min-width: calc(var(--u) * 74);
+  max-width: calc(var(--u) * 130);
+}
+:host(.named-items) .meta-essentials .meta-choices {
+  padding-block: calc(var(--u) * 4) calc(var(--u) * 6);
+}
+.meta-core {
+  flex: 0.75 1 0;
+}
+.meta-later {
+  flex: 1 1 0;
+}
+.meta-path {
+  flex: 1.85 1 0;
+}
+/* Named steps are wider: give the build order more of the row so a long order
+   still takes two lines. */
+:host(.named-items) .meta-core {
+  flex-grow: 0.7;
+}
+:host(.named-items) .meta-later {
+  flex-grow: 0.7;
+}
+:host(.named-items) .meta-path {
+  flex-grow: 2.6;
+}
+/* Runes */
+.meta-rune-pages {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  gap: calc(var(--u) * 6);
+  padding: calc(var(--u) * 8) calc(var(--u) * 8) 0;
+  overflow-x: auto;
+}
+.meta-rune-pages button {
+  border: 0;
+  border-radius: calc(var(--u) * 6);
+  padding: calc(var(--u) * 5) calc(var(--u) * 8);
+  color: var(--shine);
+  background: transparent;
+  box-shadow: none;
+  min-width: calc(var(--u) * 60);
+}
+.meta-rune-pages button[aria-pressed='true'] {
+  background: linear-gradient(var(--rim), var(--surface));
+  box-shadow:
+    inset 0 0 0 1px var(--muted-ink),
+    0 0 5px color-mix(in srgb,var(--muted-ink) 17%,transparent);
+}
+.meta-rune-pages button > span {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.meta-rune-pages .meta-art {
+  width: calc(var(--u) * 30);
+  height: calc(var(--u) * 30);
+  border-radius: 50%;
+}
+.meta-rune-pages .meta-art + .meta-art {
+  width: calc(var(--u) * 19);
+  height: calc(var(--u) * 19);
+  margin-left: calc(var(--u) * -6);
+  align-self: flex-end;
+}
+.meta-rune-pages small {
+  display: block;
+  font-size: var(--fs-xs);
+  line-height: 1.25;
+  margin-top: calc(var(--u) * 2);
+}
+.meta-rune-pages em {
+  color: var(--muted-ink);
+  font-style: normal;
+}
+.meta-rune-line {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: calc(var(--u) * 14);
+  padding: calc(var(--u) * 4) calc(var(--u) * 8);
+  flex: 1;
+  min-height: 0;
+}
+.meta-rune-line .meta-art {
+  width: calc(var(--u) * 42);
+  height: calc(var(--u) * 42);
+  border-radius: 50%;
+}
+.meta-rune-line.primary .meta-art:first-child {
+  width: calc(var(--u) * 30);
+  height: calc(var(--u) * 30);
+  border: 1px solid #d9bf6e;
+}
+.meta-rune-line.primary .meta-art:nth-child(2) {
+  width: calc(var(--u) * 54);
+  height: calc(var(--u) * 54);
+  filter: drop-shadow(0 0 5px #b89a452f);
+}
+.meta-rune-line.secondary {
+  gap: calc(var(--u) * 10);
+  padding-bottom: calc(var(--u) * 10);
+}
+.meta-rune-line.secondary .meta-art {
+  width: calc(var(--u) * 32);
+  height: calc(var(--u) * 32);
+}
+.meta-rune-divider {
+  width: 1px;
+  height: calc(var(--u) * 24);
+  background: #b49b595e;
+}
+/* Skill order */
+.meta-skill-scroll {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  padding: calc(var(--u) * 6) calc(var(--u) * 10) calc(var(--u) * 4);
+  overflow: auto;
+}
+.meta-skill-matrix {
+  width: 100%;
+  min-width: calc(var(--u) * 380);
+  border-spacing: calc(var(--u) * 2);
+  table-layout: fixed;
+}
+.meta-skill-matrix thead th:first-child {
+  width: calc(var(--u) * 30);
+}
+.meta-skill-matrix th {
+  font-weight: 500;
+}
+.meta-skill-matrix td {
+  text-align: center;
+}
+.meta-skill-matrix .sr-only {
+  width: 1px;
+}
+.meta-level {
+  text-align: center;
+  color: var(--muted-ink);
+  font-size: var(--fs-xs);
+  padding-bottom: calc(var(--u) * 2);
+}
+.meta-ability {
+  text-align: center;
+  line-height: 0;
+}
+.meta-ability .meta-art {
+  width: calc(var(--u) * 26);
+  height: calc(var(--u) * 26);
+}
+.meta-skill-cell {
+  height: calc(var(--u) * 28);
+  background: linear-gradient(var(--surface), var(--surface));
+  border: 1px solid var(--surface);
+  border-radius: calc(var(--u) * 3);
+  font-size: var(--fs-m);
+  line-height: 1;
+}
+.meta-skill-cell.learned {
+  background: var(--surface);
+  font-weight: 700;
+}
+.meta-skill-summary {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: space-between;
+  gap: calc(var(--u) * 8);
+  margin: calc(var(--u) * 2) calc(var(--u) * 10) calc(var(--u) * 10);
+  padding: calc(var(--u) * 6) calc(var(--u) * 10);
+  border: 1px solid var(--rim);
+  border-radius: calc(var(--u) * 6);
+  color: var(--muted-ink);
+  font-size: var(--fs-s);
+  white-space: nowrap;
+}
+.meta-skill-summary b {
+  color: #9fdcc9;
+  margin-left: calc(var(--u) * 3);
+}
+.meta-skill-summary strong {
+  color: var(--shine);
+}
+/* Summoner spells: the pair and the alternatives always sit side by side */
+.meta-spell-groups {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+.meta-spell-groups > section {
+  display: flex;
+  flex: 1 1 calc(var(--u) * 20);
+  flex-direction: column;
+  min-width: 0;
+}
+.meta-spell-groups > .meta-spell-pair {
+  flex: none;
+}
+.meta-spell-groups > section + section {
+  border-left: 1px solid color-mix(in srgb,var(--muted-ink) 30%,transparent);
+}
+.meta-spell-groups h4 {
+  padding: calc(var(--u) * 6) calc(var(--u) * 10) 0;
+  color: var(--muted-ink);
+  font:
+    600 var(--fs-xs) 'Segoe UI',
+    sans-serif;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.meta-spell-groups .meta-choices {
+  padding-block: calc(var(--u) * 4) calc(var(--u) * 8);
+}
+.meta-spell-groups > section + section .meta-choices {
+  grid-auto-columns: minmax(0, 1fr);
+  justify-content: stretch;
+  gap: 0;
+}
+/* Item build order */
+.meta-purchase-path {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  min-height: 0;
+  padding: calc(var(--u) * 8) calc(var(--u) * 12);
+  overflow: auto;
+  scrollbar-width: thin;
+}
+/* Steps flow like words so a long order breaks into lines of equal length. */
+.meta-purchase-line {
+  font-size: 0;
+  line-height: 0;
+  text-align: center;
+  text-wrap: balance;
+}
+.meta-step {
+  display: inline-flex;
+  align-items: flex-start;
+  gap: calc(var(--u) * 5);
+  margin: calc(var(--u) * 5) calc(var(--u) * 2.5);
+  vertical-align: top;
+}
+/* The first step keeps an empty arrow slot, so every line is the same width
+   and the icons of a wrapped order sit in columns. */
+.meta-step:first-child::before {
+  content: '\203A';
+  visibility: hidden;
+  font-size: calc(var(--u) * 15);
+}
+:host(.named-items) .meta-step {
+  margin-block: calc(var(--u) * 3);
+}
+.meta-purchase {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: calc(var(--u) * 3);
+}
+.meta-purchase .meta-art {
+  width: calc(var(--u) * 40);
+  height: calc(var(--u) * 40);
+}
+:host(.named-items) .meta-purchase .meta-art {
+  width: calc(var(--u) * 32);
+  height: calc(var(--u) * 32);
+}
+.meta-purchase.completed .meta-art {
+  outline: 1px solid #d9bb5d;
+  box-shadow: 0 0 5px #cbae4d2b;
+}
+.meta-purchase small {
+  color: #e2c269;
+  font-size: var(--fs-xs);
+  line-height: 1.2;
+}
+.meta-path-arrow {
+  color: var(--muted-ink);
+  font-size: calc(var(--u) * 15);
+  line-height: calc(var(--u) * 40);
+}
+:host(.named-items) .meta-path-arrow {
+  line-height: calc(var(--u) * 32);
+}
+
+/* Arena: augment lists on the left, item cards in one column on the right */
+.meta-arena-layout {
+  --item-size: calc(var(--u) * 36);
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+  gap: var(--gap);
+  height: 100%;
+  min-height: 0;
+}
+/* Arena with names on: smaller icons and tighter cards, so the prismatic list
+   below keeps a usable height, and a wider item column so three option cards
+   with names still share one row. */
+:host(.named-items) .meta-arena-layout {
+  --item-size: calc(var(--u) * 28);
+  grid-template-columns: minmax(0, 0.95fr) minmax(0, 1fr);
+}
+:host(.named-items) .meta-round-options > .meta-option {
+  flex-basis: calc(var(--u) * (8 + 60 * var(--n, 1)));
+}
+:host(.named-items) .meta-arena-side .meta-card:not(.meta-prismatic-sheet) .meta-choices {
+  padding-block: calc(var(--u) * 5);
+}
+:host(.named-items) .meta-arena-side .meta-choice {
+  gap: calc(var(--u) * 3);
+}
+:host(.named-items) .meta-recommended-rounds {
+  padding-block: calc(var(--u) * 5);
+}
+:host(.named-items) .meta-arena-side .meta-card:not(.meta-prismatic-sheet) .meta-item-label {
+  min-height: 0;
+}
+:host(.named-items) .meta-recommended-round .meta-choices {
+  padding: calc(var(--u) * 3) 0 0;
+}
+.meta-arena-layout > .augments-panel {
+  min-height: 0;
+}
+.augment-art .meta-art {
+  width: 100%;
+  height: 100%;
+}
+.meta-arena-side {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden auto;
+  scrollbar-width: thin;
+}
+.meta-arena-side > .panel-heading {
+  margin-bottom: calc(var(--gap) * -1);
+}
+.meta-arena-rounds {
+  flex: none;
+}
+.meta-recommended-rounds {
+  display: flex;
+  gap: calc(var(--u) * 4);
+  padding: calc(var(--u) * 8) calc(var(--u) * 6);
+}
+.meta-recommended-round {
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  min-width: 0;
+  text-align: center;
+}
+.meta-recommended-round > span {
+  color: #d5c48d;
+  font-size: var(--fs-s);
+  font-weight: 600;
+}
+.meta-recommended-round .meta-choices {
+  padding: calc(var(--u) * 5) 0 0;
+}
+.meta-round-options {
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  gap: var(--gap);
+}
+/* Wide enough for the card title even when a round lists a single item. */
+.meta-round-options > .meta-option {
+  flex-basis: calc(var(--u) * (20 + 55 * var(--n, 1)));
+  min-width: calc(var(--u) * 192);
+}
+.meta-round-options .meta-choices {
+  padding-inline: calc(var(--u) * 10);
+}
+.meta-prismatic-sheet {
+  flex: 1 1 0;
+  min-height: calc(var(--u) * 130);
+}
+.meta-prismatic-sheet h3 {
+  padding-right: calc(var(--u) * 6);
+}
+.meta-strip-note {
+  flex: none;
+  color: var(--muted-ink);
+  font:
+    var(--fs-xs) 'Segoe UI',
+    sans-serif;
+  letter-spacing: 0;
+  text-transform: none;
+}
+.meta-prismatic-search {
+  flex: 1;
+  min-width: calc(var(--u) * 80);
+  max-width: calc(var(--u) * 190);
+  margin-left: auto;
+}
+.meta-prismatic-search input {
+  width: 100%;
+  height: calc(var(--u) * 24);
+  padding: 0 calc(var(--u) * 9);
+  border: 1px solid var(--rim);
+  border-radius: calc(var(--u) * 12);
+  background: var(--ground);
+  color: var(--shine);
+  font-size: var(--fs-xs);
+}
+.meta-prismatic-sort {
+  display: flex;
+  flex: none;
+  gap: calc(var(--u) * 3);
+}
+.meta-prismatic-sort button {
+  min-width: calc(var(--u) * 38);
+  height: calc(var(--u) * 24);
+  border: 1px solid var(--rim);
+  border-radius: calc(var(--u) * 5);
+  padding: 0;
+  font:
+    550 var(--fs-xs) 'Segoe UI',
+    sans-serif;
+  letter-spacing: 0;
+}
+#meta-prismatic-items {
+  display: grid;
+  flex: 1;
+  grid-template-columns: repeat(auto-fill, minmax(calc(var(--u) * 52), 1fr));
+  align-content: start;
+  gap: calc(var(--u) * 10) calc(var(--u) * 4);
+  min-height: 0;
+  padding: calc(var(--u) * 10) calc(var(--u) * 8);
+  overflow: auto;
+  scrollbar-width: thin;
+}
+/* With names on, a small window keeps about two rows of prismatic items in
+   view; the column above scrolls a little instead. Larger windows already
+   give the list more than this. */
+:host(.named-items) .meta-prismatic-sheet {
+  min-height: calc(var(--u) * 200);
+}
+:host(.named-items) #meta-prismatic-items {
+  --item-size: calc(var(--u) * 32);
+  grid-template-columns: repeat(auto-fill, minmax(calc(var(--u) * 82), 1fr));
+  row-gap: calc(var(--u) * 8);
+  padding-block: calc(var(--u) * 8);
+}
+.meta-prismatic-item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex-direction: column;
+  min-width: 0;
+  gap: calc(var(--u) * 3);
+}
+.meta-prismatic-item .meta-art {
+  outline: 1px solid color-mix(in srgb,var(--muted-ink) 40%,transparent);
+}
+.meta-prismatic-item small {
+  color: var(--muted-ink);
+  font-size: var(--fs-xs);
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+.meta-prismatic-item .meta-item-label {
+  min-height: 0;
+}
+/* The grade sits on the icon's top-right corner. */
+.meta-prismatic-grade {
+  position: absolute;
+  top: calc(var(--u) * -4);
+  left: calc(50% + var(--item-size) / 2 - var(--u) * 12);
+  width: auto;
+  min-width: calc(var(--u) * 17);
+  height: calc(var(--u) * 15);
+  padding: 0 calc(var(--u) * 3);
+  border-radius: calc(var(--u) * 4);
+  font-size: var(--fs-xs);
+}
+.item-tooltip {
+  overflow: auto;
+}
+
+/* Narrow windows: cards stack and the page scrolls. */
+@media (max-width: 1100px), (max-height: 520px) {
+  .guide,
+  #guide-content,
+  :host(.mode-rift) .guide,
+  :host(.mode-aram) .guide {
+    flex: none;
+    overflow: visible;
+  }
+  .meta-build-toolbar,
+  .meta-row {
+    flex-wrap: wrap;
+  }
+  .meta-row > .meta-card {
+    flex-basis: 300px;
+  }
+  .meta-essentials {
+    flex-basis: 100%;
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: auto;
+  }
+  .meta-row > .meta-option {
+    flex-basis: 220px;
+  }
+  .meta-arena-layout {
+    height: auto;
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .meta-arena-side {
+    overflow: visible;
+  }
+  .meta-prismatic-sheet {
+    flex: none;
+  }
+  #meta-prismatic-items {
+    max-height: 320px;
+  }
+}
+@media (max-width: 700px) {
+  .meta-essentials {
+    grid-template-columns: 1fr;
+  }
+  .meta-recommended-rounds {
+    flex-wrap: wrap;
+  }
+  .meta-recommended-round {
+    flex-basis: 30%;
+  }
+  .meta-prismatic-sheet h3 {
+    height: auto;
+    flex-wrap: wrap;
+    padding-block: 6px;
+  }
+  .meta-strip-note {
+    display: none;
+  }
+  /* The shared sheet stacks the rarity panels here; let their parent grow so
+     the item cards cannot cover the Gold and Prismatic panels. */
+  .meta-arena-layout .augments-grid {
+    flex: none;
+  }
+}
+
+/* Short windows: text stops shrinking at 10px while icons keep scaling, so
+   names take relatively more height. Slightly smaller icons and spacing keep
+   the named ARAM and Rift pages within the window (1366x697 and similar). */
+@media (max-height: 760px) {
+  :host(.named-items) .meta-spells,
+  :host(.named-items) .meta-starting {
+    --item-size: calc(var(--u) * 24);
+  }
+  :host(.named-items) .meta-essentials .meta-choices {
+    padding-block: calc(var(--u) * 3);
+  }
+  :host(.named-items) .meta-purchase .meta-art {
+    width: calc(var(--u) * 28);
+    height: calc(var(--u) * 28);
+  }
+  :host(.named-items) .meta-path-arrow {
+    line-height: calc(var(--u) * 28);
+  }
+  :host(.named-items) .meta-step {
+    margin-block: calc(var(--u) * 2);
+  }
+  :host(.named-items) .meta-purchase-path {
+    padding-block: calc(var(--u) * 4);
+  }
+}

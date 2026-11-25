@@ -1,0 +1,1 @@
+{"identifier":"local-ui","description":"Oracle bundled dashboard only","windows":["dashboard"],"permissions":["allow-ready","allow-action","core:event:allow-listen","core:event:allow-unlisten","core:window:allow-start-dragging"]}

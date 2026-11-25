@@ -1,0 +1,17 @@
+{
+  "productName": "Oracle",
+  "version": "1.2.0",
+  "identifier": "com.frilo369.oracle",
+  "build": { "frontendDist": "../src/ui" },
+  "app": {
+    "windows": [],
+    "withGlobalTauri": true,
+    "security": { "capabilities": ["local-ui", "guide"] }
+  },
+  "bundle": {
+    "active": false,
+    "publisher": "FrYiLo",
+    "shortDescription": "League of Legends analytics tray companion",
+    "icon": ["icons/icon.ico"]
+  }
+}

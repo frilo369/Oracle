@@ -1,0 +1,213 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" /><meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: http://umbra-icon.localhost https://raw.communitydragon.org https://game.gtimg.cn; connect-src 'self' ipc: http://ipc.localhost;">
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta name="color-scheme" content="dark" />
+    <title>Oracle · ARAM: Mayhem</title>
+    <link rel="stylesheet" href="mayhem.css" />
+    <link rel="stylesheet" href="guide-theme.css" />
+  <link rel="stylesheet" href="../appearance.css"><script src="../appearance.js"></script><script src="../bridge.js"></script></head>
+  <body>
+    <svg class="icon-definitions" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <symbol id="mark-skills" viewBox="0 0 24 24">
+          <path
+            d="M13 2c2 5-3 6-1 10 2-1 3-3 3-5 4 3 6 6 4 10a8 8 0 0 1-14-1c-1-4 1-6 4-9-1 3 0 4 1 5 0-4 3-6 3-10Z"
+          />
+        </symbol>
+        <symbol id="mark-augments" viewBox="0 0 24 24">
+          <path d="m12 2 9 10-9 10L3 12 12 2Zm-7 9 7 8 7-8M4 16l3 3m10 0 3-3" />
+        </symbol>
+        <symbol id="mark-rarity-silver" viewBox="0 0 24 24">
+          <path d="m12 3 8 9-8 9-8-9 8-9Zm0 5 4 4-4 4-4-4 4-4Z" />
+        </symbol>
+        <symbol id="mark-rarity-gold" viewBox="0 0 24 24">
+          <path d="m7 3 10 0 5 9-5 9H7l-5-9 5-9Zm0 0 5 9 5-9M2 12h20M7 21l5-9 5 9" />
+        </symbol>
+        <symbol id="mark-rarity-prismatic" viewBox="0 0 24 24">
+          <path d="m6 3 12 0 5 6-11 13L1 9l5-6Zm0 0 6 19L18 3M1 9h22M6 3l6 6 6-6" />
+        </symbol>
+        <symbol id="mark-items" viewBox="0 0 24 24">
+          <path
+            d="m5 3 6 6-3 3-6-6V2h4Zm14 0-6 6 3 3 6-6V2h-4ZM4 15l5 5m11-5-5 5M7 17l-4 4m14-4 4 4M10 10l4 4m-4 0 4-4"
+          />
+        </symbol>
+        <symbol id="mark-core" viewBox="0 0 24 24">
+          <path
+            d="M12 5c-3-3-6-3-10-2v16c4-1 7-1 10 2 3-3 6-3 10-2V3c-4-1-7-1-10 2Zm0 0v16M6 6v9m12-9v9"
+          />
+        </symbol>
+        <symbol id="mark-other" viewBox="0 0 24 24">
+          <path d="m12 2 9 5v10l-9 5-9-5V7l9-5Zm-9 5 9 5 9-5m-9 5v10M8 4l9 5" />
+        </symbol>
+        <symbol id="mark-boots" viewBox="0 0 24 24">
+          <path d="M10 3h7l-1 10 5 4v4H3v-4l5-3 2-11Zm1 4h5m-6 4h5M3 18h18" />
+        </symbol>
+        <symbol id="mark-stats" viewBox="0 0 24 24">
+          <path d="M3 14h4v7H3Zm7-5h4v12h-4Zm7-6h4v18h-4Z" />
+        </symbol>
+        <symbol id="mark-calendar" viewBox="0 0 24 24">
+          <rect x="3" y="5" width="18" height="16" rx="2" />
+          <path d="M7 2v6m10-6v6M3 10h18m-14 4h2m3 0h2m3 0h1M7 17h2m3 0h2" />
+        </symbol>
+        <symbol id="mark-search" viewBox="0 0 24 24">
+          <circle cx="10" cy="10" r="7" />
+          <path d="m15 15 6 6" />
+        </symbol>
+      </defs>
+    </svg>
+    <header class="toolbar meta-banner">
+      <div class="meta-identity champion-picker" title="Choose a champion">
+        <span class="meta-portrait" data-art
+          ><img id="champion-icon" alt="" hidden /><span
+            class="art-fallback"
+            id="champion-art-fallback"
+            aria-hidden="true"
+            >?</span
+          ></span
+        >
+        <div class="meta-title">
+          <h1>
+            <span id="champion-name">Mayhem</span> <span class="meta-title-gold">BUILD GUIDE</span>
+          </h1>
+          <small>ARAM: MAYHEM · AUGMENTS · SKILLS · ITEMS</small>
+          <span class="champion-picker-cue" aria-hidden="true">Change champion <span>⌄</span></span>
+        </div>
+        <select id="champion-select" aria-label="Choose a champion" disabled>
+          <option>Loading champions…</option>
+        </select>
+      </div>
+      <section id="skills-strip" class="skills-strip" aria-label="Skill order" hidden>
+        <label class="skills-label" for="skill-select"
+          ><svg class="section-icon" aria-hidden="true">
+            <use href="#mark-skills" /></svg
+          >Skills</label
+        ><select id="skill-select" aria-label="Skill priority"></select>
+        <div id="skills"></div>
+      </section>
+      <div id="champion-stats" class="champion-stats"></div>
+      <div class="toolbar-actions">
+        <span class="date-badge"
+          ><svg class="section-icon" aria-hidden="true">
+            <use href="#mark-calendar" /></svg
+          ><span id="data-date">Loading recommendations…</span></span
+        ><button
+          id="refresh"
+          class="button refresh-button"
+          type="button"
+          title="Refresh recommendations"
+          aria-label="Refresh recommendations"
+        >
+          ↻
+        </button>
+      </div>
+    </header>
+    <main class="guide">
+      <div id="notice" class="notice" role="status" hidden></div>
+      <div id="error" class="error-card" role="alert" hidden>
+        <h2>Mayhem data is unavailable</h2>
+        <p id="error-message"></p>
+        <button id="retry" class="button" type="button">Try again</button>
+      </div>
+      <div id="loading" class="loading" role="status">
+        <span class="spinner"></span>Loading your champion’s recommendations…
+      </div>
+      <div id="guide-content" hidden>
+        <div class="dashboard">
+          <section class="augments-panel" aria-labelledby="augment-heading">
+            <div class="panel-heading">
+              <h2 id="augment-heading">
+                <svg class="section-icon" aria-hidden="true">
+                  <use href="#mark-augments" /></svg
+                >Augments <span id="augment-count" class="count"></span>
+              </h2>
+              <label class="augment-search"
+                ><svg class="section-icon" aria-hidden="true">
+                  <use href="#mark-search" />
+                </svg>
+                <input
+                  id="augment-search"
+                  type="search"
+                  aria-label="Search augments"
+                  placeholder="Search all augments…" /></label
+              ><span
+                class="heading-note"
+                title="Tencent’s champion-specific grades. Augment win rates are not supplied."
+                >Pick rate · grade</span
+              >
+            </div>
+            <div class="augments-grid">
+              <section class="rarity-panel rarity-Silver" aria-labelledby="silver-heading">
+                <h3 id="silver-heading">
+                  <svg class="rarity-gem" aria-hidden="true"><use href="#mark-rarity-silver" /></svg
+                  >Silver<span id="silver-count" class="count"></span>
+                </h3>
+                <div
+                  id="silver-rows"
+                  class="augment-list"
+                  tabindex="0"
+                  role="region"
+                  aria-label="Silver augment recommendations"
+                ></div>
+              </section>
+              <section class="rarity-panel rarity-Gold" aria-labelledby="gold-heading">
+                <h3 id="gold-heading">
+                  <svg class="rarity-gem" aria-hidden="true"><use href="#mark-rarity-gold" /></svg
+                  >Gold<span id="gold-count" class="count"></span>
+                </h3>
+                <div
+                  id="gold-rows"
+                  class="augment-list"
+                  tabindex="0"
+                  role="region"
+                  aria-label="Gold augment recommendations"
+                ></div>
+              </section>
+              <section class="rarity-panel rarity-Prismatic" aria-labelledby="prismatic-heading">
+                <h3 id="prismatic-heading">
+                  <svg class="rarity-gem" aria-hidden="true">
+                    <use href="#mark-rarity-prismatic" /></svg
+                  >Prismatic<span id="prismatic-count" class="count"></span>
+                </h3>
+                <div
+                  id="prismatic-rows"
+                  class="augment-list"
+                  tabindex="0"
+                  role="region"
+                  aria-label="Prismatic augment recommendations"
+                ></div>
+              </section>
+            </div>
+          </section>
+          <section class="builds-panel" aria-labelledby="build-heading">
+            <div class="panel-heading">
+              <h2 id="build-heading">
+                <svg class="section-icon" aria-hidden="true">
+                  <use href="#mark-items" /></svg
+                >Items
+              </h2>
+              <span class="heading-note">Win rate · pick rate</span>
+            </div>
+            <div id="equipment" class="equipment-grid"></div>
+          </section>
+        </div>
+      </div>
+    </main>
+    <footer>
+      <span>English Riot game names · Tencent 101 (CN) Mayhem data</span
+      ><span>Items: win / pick · Augments: pick / Tencent grade</span>
+    </footer>
+    <div
+      id="item-tooltip"
+      class="item-tooltip"
+      role="region"
+      aria-label="Item details"
+      tabindex="0"
+      aria-live="polite"
+      aria-atomic="true"
+      hidden
+    ></div>
+    <script type="module" src="mayhem.js"></script>
+  </body>
+</html>

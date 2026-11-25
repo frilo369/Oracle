@@ -1,0 +1,13 @@
+/* Shared materials. Asset colour is applied independently by appearance.js. */
+:root {
+  --silver: #cabfb1;
+  --accent: #ae1236;
+  --shine: #fff3e7;
+  --rim: color-mix(in srgb,var(--silver) 64%,#2b292c);
+  --muted-ink: color-mix(in srgb,var(--silver) 56%,#c5c5cc);
+  --ground: color-mix(in srgb,var(--accent) 2%,#101012);
+  --surface: color-mix(in srgb,var(--silver) 6%,#141416);
+  --metal: linear-gradient(150deg,var(--shine),var(--rim) 22%,#373538 39%,var(--silver) 63%,#484549 79%,var(--shine));
+  --enamel: linear-gradient(165deg,color-mix(in srgb,var(--accent) 77%,#181319),color-mix(in srgb,var(--accent) 35%,#08080b) 75%,color-mix(in srgb,var(--accent) 53%,#08080b));
+  --graphite: linear-gradient(145deg,color-mix(in srgb,var(--silver) 13%,#171719),var(--ground) 64%,var(--surface));
+}

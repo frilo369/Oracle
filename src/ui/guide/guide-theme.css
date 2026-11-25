@@ -1,0 +1,309 @@
+/* Shared frames and readable rarity artwork. Mode layouts stay in their own stylesheets. */
+:root {
+  --frame-blue: var(--muted-ink);
+  --frame-gold: var(--silver);
+  --mint: #7debdc;
+  --gold: var(--silver);
+}
+body {
+  background:
+    radial-gradient(ellipse at 80% -20%, color-mix(in srgb,var(--rim) 50%,transparent), transparent 55%),
+    linear-gradient(135deg, var(--surface), var(--ground) 65%, var(--surface));
+}
+.toolbar {
+  background: linear-gradient(110deg, var(--ground), color-mix(in srgb,var(--surface) 67%,transparent) 70%, var(--ground));
+  border-bottom-color: var(--muted-ink);
+  box-shadow: 0 1px 8px color-mix(in srgb,var(--muted-ink) 20%,transparent);
+}
+.meta-title-gold {
+  color: var(--silver);
+}
+.rarity-panel,
+.equipment-section,
+.meta-card {
+  position: relative;
+  border-color: var(--muted-ink);
+  border-radius: var(--radius);
+  background: linear-gradient(135deg, color-mix(in srgb,var(--surface) 93%,transparent), color-mix(in srgb,var(--surface) 96%,transparent) 48%, color-mix(in srgb,var(--surface) 93%,transparent));
+  box-shadow:
+    inset 0 0 16px color-mix(in srgb,var(--muted-ink) 10%,transparent),
+    0 3px 9px #0007,
+    0 0 5px color-mix(in srgb,var(--muted-ink) 19%,transparent);
+}
+.rarity-panel::after,
+.equipment-section::after,
+.meta-card::after {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  pointer-events: none;
+  border: 1px solid transparent;
+  background: linear-gradient(
+      135deg,
+      var(--edge, var(--silver)),
+      transparent 13%,
+      transparent 87%,
+      var(--edge, var(--silver))
+    )
+    border-box;
+  -webkit-mask:
+    linear-gradient(#fff 0 0) padding-box,
+    linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+}
+.rarity-Silver {
+  --edge: #87c7e8;
+  border-color: #6593ac;
+}
+.rarity-Gold {
+  --edge: #e9c65d;
+  border-color: #b3974b;
+}
+.rarity-Prismatic {
+  --edge: #c191df;
+  border-color: #9474a8;
+}
+h1,
+h2,
+h3 {
+  font-family: Georgia, 'Times New Roman', serif;
+  letter-spacing: 0.025em;
+}
+.rarity-panel h3,
+.equipment-section h3,
+.meta-card h3 {
+  background: linear-gradient(110deg, #092039a8, transparent 85%);
+  border-bottom-color: #6e8b9d55;
+  color: #f0eee6;
+}
+.section-icon {
+  color: #dcc174;
+  filter: drop-shadow(0 0 3px #c0a96c35);
+}
+.rarity-Silver .section-icon {
+  color: #8bdbf2;
+}
+.rarity-Prismatic .section-icon {
+  color: #c09cdd;
+}
+.rarity-gem {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  filter: none;
+}
+button,
+select,
+.button {
+  border-color: var(--rim);
+  background: linear-gradient(var(--surface), var(--ground));
+  box-shadow: inset 0 1px 3px color-mix(in srgb,var(--muted-ink) 11%,transparent);
+}
+button,
+select,
+input {
+  font-family: 'Segoe UI', system-ui, sans-serif;
+}
+button:hover,
+select:hover,
+.button:hover {
+  border-color: #d2b56b;
+  background: linear-gradient(var(--surface), var(--surface));
+}
+button[aria-pressed='true'],
+.section-sort button[aria-pressed='true'] {
+  color: var(--shine);
+  background: linear-gradient(var(--rim), var(--surface));
+  border-color: var(--muted-ink);
+  box-shadow:
+    inset 0 1px 7px color-mix(in srgb,var(--shine) 21%,transparent),
+    0 0 7px color-mix(in srgb,var(--shine) 29%,transparent);
+}
+.section-sort {
+  border-color: var(--rim);
+  background: var(--ground);
+}
+.augment-row {
+  border-bottom-color: color-mix(in srgb,var(--rim) 18%,transparent);
+}
+.augment-art {
+  border-color: color-mix(in srgb, var(--rarity) 55%, var(--rim));
+  box-shadow:
+    inset 0 0 4px color-mix(in srgb,var(--shine) 14%,transparent),
+    0 1px 5px #0009;
+}
+/* Keep the source symbol crisp; a glow on the artwork washes out its detail. */
+.rarity-Silver .augment-art {
+  background: #122432;
+}
+.rarity-Gold .augment-art {
+  background: #30230d;
+  box-shadow: inset 0 0 0 1px #d9b45433;
+}
+.rarity-Prismatic .augment-art {
+  background: #271a39;
+  box-shadow: inset 0 0 0 1px #d4a2ef33;
+}
+.rarity-panel .augment-art img {
+  filter: none;
+}
+/* Grades read at a glance: gold S, green A, blue B, muted C and D. */
+.grade {
+  border-color: color-mix(in srgb,var(--muted-ink) 47%,transparent);
+  background: linear-gradient(var(--surface), var(--surface));
+}
+.grade-S {
+  border-color: #c9a243;
+  background: linear-gradient(#8a6417, #45310a);
+  color: #fff3bd;
+}
+.grade-A {
+  border-color: #3f9a86;
+  background: linear-gradient(#1f6658, #0c3a34);
+  color: #d1fff3;
+}
+.grade-B {
+  border-color: #4f84b4;
+  background: linear-gradient(#234f77, #102a44);
+  color: #dcecff;
+}
+.grade-C,
+.grade-D {
+  border-color: #53657766;
+  background: #172533;
+  color: #a9b6c6;
+}
+/* One colour per ability key wherever a skill order is shown. */
+.skill-Q {
+  --skill: #7ce4a7;
+}
+.skill-W {
+  --skill: #f18b91;
+}
+.skill-E {
+  --skill: #7bbfee;
+}
+.skill-R {
+  --skill: #f3d06c;
+}
+.skill-key,
+.meta-skill-cell.learned {
+  border-color: color-mix(in srgb, var(--skill, var(--muted-ink)) 50%, var(--surface));
+  color: var(--skill, var(--shine));
+}
+.skill-key.skill-R,
+.meta-skill-cell.learned.skill-R {
+  background: linear-gradient(#5a4313, #2d2109);
+}
+.champion-stats {
+  border-color: var(--muted-ink);
+  background: linear-gradient(110deg, var(--surface), var(--ground));
+  box-shadow:
+    inset 0 0 12px color-mix(in srgb,var(--muted-ink) 10%,transparent),
+    0 0 6px color-mix(in srgb,var(--muted-ink) 15%,transparent);
+}
+.item img,
+.meta-art img {
+  border-color: #9b8b60;
+}
+.notice {
+  background: #241f12;
+  border-color: #b29a5b77;
+}
+.count {
+  background: linear-gradient(var(--surface), var(--ground));
+  border-color: color-mix(in srgb,var(--muted-ink) 40%,transparent);
+}
+.button:focus-visible,
+button:focus-visible,
+select:focus-visible,
+input:focus-visible,
+[tabindex]:focus-visible {
+  outline-color: #eed69c;
+}
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+.item-tooltip {
+  width: min(calc(var(--u) * 350), calc(100vw - 40px));
+  pointer-events: auto;
+  max-height: min(calc(var(--u) * 460), 65dvh);
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+.item-tooltip::after {
+  content: 'Enter / F2 focus details · Esc close';
+  display: block;
+  margin-top: calc(var(--u) * 10);
+  padding-top: calc(var(--u) * 7);
+  border-top: 1px solid color-mix(in srgb,var(--rim) 40%,transparent);
+  color: var(--muted-ink);
+  font-size: var(--fs-xs);
+}
+.art-fallback {
+  display: none;
+}
+.art-failed > .art-fallback,
+.art-absent {
+  display: grid;
+  place-items: center;
+  width: var(--item-size);
+  height: var(--item-size);
+  flex: none;
+  border: 1px dashed var(--muted-ink);
+  border-radius: calc(var(--u) * 4);
+  background: var(--surface);
+  color: #fff;
+  font:
+    600 var(--fs-xs) 'Segoe UI',
+    sans-serif;
+}
+.art-failed > img {
+  display: none;
+}
+.augment-art > .art-fallback,
+.meta-art > .art-fallback,
+.meta-portrait > .art-fallback {
+  width: 100%;
+  height: 100%;
+}
+.champion-picker-cue {
+  display: flex;
+  align-items: center;
+  gap: calc(var(--u) * 6);
+  margin-top: calc(var(--u) * 2);
+  color: var(--muted-ink);
+  font:
+    var(--fs-xs) / 1.2 'Segoe UI',
+    sans-serif;
+  letter-spacing: normal;
+}
+.champion-picker-cue > span {
+  font-size: var(--fs-m);
+  line-height: 0.8;
+  color: #ead293;
+}
+.champion-picker:hover {
+  background: color-mix(in srgb,var(--rim) 10%,transparent);
+}
+/* Guide data keeps its rarity, grade and ability colours. */
+body,.meta-banner,.toolbar{background:var(--graphite);color:var(--shine)}
+.toolbar,.meta-banner{border-color:var(--rim);box-shadow:0 1px 0 var(--silver)}
+.meta-card,.equipment-section,.rarity-panel,.section-sort,.champion-stats,.item-tooltip,select{background:var(--graphite);border-color:var(--edge,var(--rim));color:var(--shine)}
+.section-sort button[aria-pressed='true'],button[aria-pressed='true'],.button:hover,button:hover,select:hover{background:var(--enamel);border-color:var(--silver);color:var(--shine)}
+button,select,.button,.count,.date-badge{background:var(--graphite);border-color:var(--rim);color:var(--shine)}
+.meta-title-gold,.section-icon,.champion-picker-cue>span{color:var(--silver)}
+.rarity-panel h3,.equipment-section h3,.meta-card h3{background:linear-gradient(110deg,var(--surface),transparent);color:var(--shine)}
+.rarity-Silver .section-icon{color:#8bdbf2}.rarity-Gold .section-icon{color:#e9c65d}.rarity-Prismatic .section-icon{color:#c09cdd}
+.champion-stats{box-shadow:inset 0 0 9px #0007}

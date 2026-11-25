@@ -1,6 +1,6 @@
 # Oracle
 
-Windows tray companion for League of Legends. Rust/Tauri 2 with a buildless HTML/CSS/JavaScript interface. Version 1.0.0, setup label 1.0.
+Windows tray companion for League of Legends. Rust/Tauri 2 with a buildless HTML/CSS/JavaScript interface. Version 1.2.0, setup label 1.2. 1.0/1.1 were local acceptance builds, not delivered. 1.2 formats the accepted Rust source for maintenance; behavior matches 1.1.
 
 - Reference: `C:\Users\fryil\Documents\Rust-Friloverse-Skins` (Umbra). Read-only reference; it has unrelated uncommitted work. Oracle copies guide assets/code only, never its skin engine, LTK, party, updater or Vanguard code.
 - Visual direction: Umbra Default, silver frames, ruby accents, eclipse artwork, Cinzel headings. Guides preserve the original layouts and providers (MetaSRC for Rift/ARAM/Arena, Tencent for Mayhem).
@@ -9,3 +9,6 @@ Windows tray companion for League of Legends. Rust/Tauri 2 with a buildless HTML
 - Use only disposable `.test` profiles for verification (`ORACLE_DATA_DIR`). Never write to League, LTK or Umbra data. Local League credentials stay in memory on loopback; never log them.
 - Remote MetaSRC windows receive no Tauri command capabilities. Never automate human verification; leave Cloudflare checks visible. WebView creation must happen off WebView callbacks.
 - Keep short phase notes here; longer decisions and ideas belong in `docs/`.
+- 1.2 accepted locally: fmt/check, 20 Rust + 4 frontend tests; native F1 with a deliberate global-key conflict, Ctrl+G, focus/reopen/restore, match-end/capture suppression, favorites/Unicode notes/restart, quiet tray start and single-instance forwarding pass. Installer install/reinstall/uninstall/hash/data preservation pass; the identical 1.1 installer UI also passed locked-file rollback and screenshot review. Live Arena and current Mayhem sources pass; ARAM/Rift show human checks (never bypass). Real League match acceptance remains open. See `docs/validation-1.2.md`.
+- Acceptance helpers: `node scripts/check-native.mjs [workspace-exe]`, `scripts/check-setup.ps1 -Setup <relative-path>`. Native helpers require `dependencies/playwright-core` (Playwright Core package only, no downloaded browser); use actual WebView2. Debugging ports must be fresh after restart; index.html is normalized to `/` by Tauri.
+- Tool setup: `scripts/prepare-tools.ps1`; icons/installer wordmark: `scripts/prepare-assets.ps1`; live providers: `node scripts/check-meta.mjs`, `node scripts/check-mayhem-live.mjs`; drawn setup acceptance: `scripts/check-setup-ui.ps1`. `scripts/adapt-reference.mjs` documents the one-time extraction and should not be rerun on edited Oracle source. After changing the version, run `scripts/cargo.ps1 check --offline` once to refresh Cargo.lock before locked builds.

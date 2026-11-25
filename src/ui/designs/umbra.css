@@ -1,0 +1,9 @@
+/* Designs own layouts and decorative artwork, never the chosen background or colour.
+   New designs may override any layout rule and these asset tokens on every window. */
+:root {
+  --asset-wordmark: url('../lobby/wordmark.webp');
+  --asset-member-card: url('../lobby/member-card.webp');
+  --asset-avatar: url('../lobby/avatar.webp');
+  --asset-divider: url('../lobby/divider.webp');
+  --asset-room-bar: url('../lobby/room-bar.svg');
+}
