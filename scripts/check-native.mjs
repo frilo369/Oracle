@@ -113,6 +113,17 @@ try {
   const parsed=parseMayhemBuild(JSON.parse(await readFile(join(root,'tests/fixtures/mayhem-annie.json'),'utf8')),1);
   assert.equal(await page.locator('#skill-select').inputValue(),parsed.skillOrders[0].priority.join('-'));
   assert.ok((await page.locator('#skill-select option').allTextContents())[0].startsWith('Best ·'));
+  const searchPerformance=await page.evaluate(()=>{
+    const rows=[...document.querySelectorAll('.augment-row')],input=document.querySelector('#augment-search');
+    const samples=[];
+    for(let i=0;i<40;i++){input.value=i%2?'':'no-such-augment-xyz';const start=performance.now();input.dispatchEvent(new Event('input'));samples.push(performance.now()-start);}
+    input.value='no-such-augment-xyz';input.dispatchEvent(new Event('input'));
+    const filtered=rows.every(row=>row.hidden);
+    input.value='';input.dispatchEvent(new Event('input'));
+    return {rows:rows.length,filtered,restored:rows.every(row=>!row.hidden),sameNodes:rows.every((row,i)=>row===document.querySelectorAll('.augment-row')[i]),medianMs:samples.sort((a,b)=>a-b)[Math.floor(samples.length/2)]};
+  });
+  assert.equal(searchPerformance.filtered,true);assert.equal(searchPerformance.restored,true);assert.equal(searchPerformance.sameNodes,true,'typing must reuse the loaded artwork nodes');
+  observations.push({scenario:'Mayhem search without rebuilding artwork',...searchPerformance});
   await page.screenshot({path:join(output,'mayhem.png')});
   await input('release');
   assert.equal((await status()).maximized,true);assert.equal((await status()).fullscreen,false);
@@ -136,7 +147,29 @@ try {
   helper.stdin.write('quit\n');await new Promise(done=>helper.once('exit',done));await stop();
   await launch();const saved=await ready();assert.equal(saved.settings.guideHotkey,'Ctrl+KeyG');assert.deepEqual(saved.settings.lastGuide,{champion:1,mode:'mayhem'});assert.equal(saved.settings.launchInTray,true);
   assert.equal(await dashboard.locator('#desk-champion').inputValue(),'1');assert.equal(await dashboard.locator('#desk-mode').inputValue(),'mayhem');
-  await action('hide');await delay(250);assert.equal(child.exitCode,null);await forward();
+  const compact=await dashboard.evaluate(()=>window.__TAURI__.core.invoke('ready',{compact:true}));
+  const fullBytes=Buffer.byteLength(JSON.stringify(await ready())),compactBytes=Buffer.byteLength(JSON.stringify(compact));
+  assert.equal(Object.hasOwn(compact,'champions'),false);assert.ok(compactBytes<fullBytes/5);
+  await forward();
+  await until(()=>dashboard.evaluate(()=>window.__TAURI__.window.getCurrentWindow().isVisible()));
+  await delay(500);
+  await dashboard.evaluate(()=>{
+    window.__auditIdle={polls:0,mutations:0,colours:0};window.__auditOriginalCore=window.__TAURI__.core;
+    const invoke=window.__TAURI__.core.invoke;
+    window.__TAURI__.core={...window.__TAURI__.core,invoke:(command,args)=>{if(command==='ready')window.__auditIdle.polls++;return invoke(command,args);}};
+    window.__auditObserver=new MutationObserver(records=>window.__auditIdle.mutations+=records.length);
+    window.__auditObserver.observe(document.body,{subtree:true,attributes:true,childList:true,characterData:true});
+    window.addEventListener('umbra-colour',()=>window.__auditIdle.colours++);
+  });
+  await delay(2600);
+  const idle=await dashboard.evaluate(async()=>({...window.__auditIdle,visible:await window.__TAURI__.window.getCurrentWindow().isVisible(),hidden:document.hidden}));
+  assert.ok(idle.polls>0,'visible dashboard still refreshes: '+JSON.stringify(idle));assert.equal(idle.mutations,0,'unchanged state must not repaint');assert.equal(idle.colours,0,'unchanged state must not repaint the theme');
+  await action('hide');await delay(400);assert.equal(child.exitCode,null);
+  await dashboard.evaluate(()=>window.__auditIdle.polls=0);await delay(2600);
+  const hiddenPolls=await dashboard.evaluate(()=>window.__auditIdle.polls);assert.equal(hiddenPolls,0,'tray-only dashboard must not poll');
+  await action('fixture',{target:null});await forward();await dashboard.waitForFunction(()=>document.querySelector('#match-champion').textContent==='No active match');
+  await dashboard.evaluate(()=>{window.__auditObserver.disconnect();window.__TAURI__.core=window.__auditOriginalCore;});
+  observations.push({scenario:'Dashboard idle and tray work',fullBytes,compactBytes,...idle,hiddenPolls});
   assert.deepEqual(errors,[]);
   await writeFile(join(output,'verified.json'),JSON.stringify({observations,pendingCaptureCancelled:true,manualClickTargetPreserved:true,compactUI:true,removedPages:true,defaultTray:true,skillRanking:true,activationHelper:true,fullscreenLikeReturn:true,persistence:true,trayPersistence:true,singleInstance:true,captureSuppressed:true,matchEndSuppressed:true,errors},null,2));
   console.log('Native acceptance passed: '+output);

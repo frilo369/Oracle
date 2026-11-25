@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {captureController,revisionGate} from '../src/ui/async-state.mjs';
+import {captureController,revisionGate,mergeSnapshot,refreshController} from '../src/ui/async-state.mjs';
 const deferred=()=>{let resolve,reject;const promise=new Promise((a,b)=>{resolve=a;reject=b;});return {promise,resolve,reject};};
 test('cancelling an in-flight capture always reaches native after it starts',async()=>{
   const start=deferred(),calls=[];
@@ -26,4 +26,30 @@ test('polls started before a completed settings save are rejected',()=>{
   assert.equal(gate.accepts(old),false);done();assert.equal(gate.accepts(old),false);
   assert.equal(gate.accepts(gate.snapshot()),true);
   const first=gate.begin(),second=gate.begin();first();assert.equal(gate.accepts(gate.snapshot()),false);second();assert.equal(gate.accepts(gate.snapshot()),true);
+});
+
+test('compact updates preserve the catalogue and retired data without repainting unchanged state',()=>{
+  const state={champions:[{id:1}],settings:{notes:{1:'Keep me'},assetColour:'#ae1236'},guideTarget:null};
+  const unchanged={settings:{assetColour:'#ae1236'},guideTarget:null};
+  assert.equal(mergeSnapshot(state,unchanged),state);
+  const next=mergeSnapshot(state,{...unchanged,guideTarget:{id:103,mode:'aram'}});
+  assert.equal(next.champions,state.champions);
+  assert.equal(next.settings.notes,state.settings.notes);
+  assert.equal(next.guideTarget.id,103);
+  assert.equal(state.guideTarget,null);
+});
+
+test('background refresh sleeps until shown and never overlaps a pending request',async()=>{
+  const timers=new Map();let id=0,calls=0,pending=deferred();
+  const clock={setTimeout(fn,ms){timers.set(++id,{fn,ms});return id;},clearTimeout(key){timers.delete(key);}};
+  const refresh=refreshController(()=>{calls++;return pending.promise;},1200,clock);
+  refresh.setActive(true);assert.equal(calls,1);
+  refresh.setActive(false);refresh.setActive(true);assert.equal(calls,1);
+  pending.resolve();await Promise.resolve();
+  assert.equal(timers.size,1);assert.equal([...timers.values()][0].ms,0);
+  const timer=[...timers.values()][0];pending=deferred();timer.fn();assert.equal(calls,2);
+  refresh.setActive(false);pending.resolve();await Promise.resolve();assert.equal(timers.size,0);
+  refresh.setActive(true);await Promise.resolve();assert.equal(calls,3);
+  assert.equal([...timers.values()][0].ms,1200);
+  refresh.setActive(false);assert.equal(timers.size,0);
 });

@@ -75,10 +75,19 @@ pub fn show_dashboard(app: &AppHandle) -> Result<(), String> {
             w.on_window_event(move |e| {
                 if let tauri::WindowEvent::CloseRequested { api, .. } = e {
                     api.prevent_close();
+                    let _ = copy.emit("oracle-dashboard-visible", false);
                     let _ = copy.hide();
                     if let Ok(mut v) = handle.state::<Desktop>().view.lock() {
                         v["guideCapture"] = json!(false);
                     }
+                } else if matches!(
+                    e,
+                    tauri::WindowEvent::Focused(_) | tauri::WindowEvent::Resized(_)
+                ) {
+                    let _ = copy.emit(
+                        "oracle-dashboard-visible",
+                        copy.is_visible().unwrap_or(false) && !copy.is_minimized().unwrap_or(false),
+                    );
                 }
             });
             w
@@ -86,6 +95,7 @@ pub fn show_dashboard(app: &AppHandle) -> Result<(), String> {
     };
     w.unminimize().map_err(|e| e.to_string())?;
     w.show().map_err(|e| e.to_string())?;
+    let _ = w.emit("oracle-dashboard-visible", true);
     w.set_focus().map_err(|e| e.to_string())
 }
 pub fn guide_page(app: &AppHandle, champion: u64) -> Result<WebviewWindow, String> {
@@ -145,12 +155,65 @@ pub fn guide_window(app: &AppHandle, champion: u64) -> Result<(), String> {
 }
 
 #[tauri::command]
-pub fn ready(state: tauri::State<'_, Desktop>) -> Result<Value, String> {
+pub fn ready(state: tauri::State<'_, Desktop>, compact: Option<bool>) -> Result<Value, String> {
     state
         .view
         .lock()
-        .map(|v| v.clone())
+        .map(|v| dashboard_snapshot(&v, compact == Some(true)))
         .map_err(|_| "State unavailable".into())
+}
+
+fn dashboard_snapshot(view: &Value, compact: bool) -> Value {
+    if !compact {
+        return view.clone();
+    }
+    // The champion picker is loaded once. Retired notebook data must not cross IPC
+    // on every refresh, even for profiles with years of saved notes.
+    let mut snapshot = json!({});
+    for key in [
+        "version",
+        "guideTarget",
+        "guideCapture",
+        "leagueConnected",
+        "phase",
+        "shortcutStatus",
+        "detectedChampion",
+        "error",
+    ] {
+        snapshot[key] = view[key].clone();
+    }
+    snapshot["settings"] = json!({});
+    for key in [
+        "startWithWindows",
+        "launchInTray",
+        "guideHotkey",
+        "assetColour",
+        "lastGuide",
+    ] {
+        snapshot["settings"][key] = view["settings"][key].clone();
+    }
+    snapshot
+}
+
+#[test]
+fn compact_refresh_omits_static_catalogue_and_retired_preferences() {
+    let view = json!({
+        "champions": [{"id":1,"name":"Annie"}],
+        "settings":{"notes":{"1":"retained"},"favorites":[1],"guideHotkey":"F1","lastGuide":{"champion":1,"mode":"mayhem"}},
+        "guideTarget":{"id":103,"mode":"aram"},"error":"test"
+    });
+    let snapshot = dashboard_snapshot(&view, true);
+    assert!(snapshot.get("champions").is_none());
+    assert!(snapshot["settings"].get("notes").is_none());
+    assert!(snapshot["settings"].get("favorites").is_none());
+    assert_eq!(snapshot["settings"]["guideHotkey"], "F1");
+    assert_eq!(
+        snapshot["settings"]["lastGuide"],
+        view["settings"]["lastGuide"]
+    );
+    assert_eq!(snapshot["guideTarget"], view["guideTarget"]);
+    assert_eq!(snapshot["error"], "test");
+    assert_eq!(dashboard_snapshot(&view, false), view);
 }
 
 #[tauri::command]
@@ -229,10 +292,11 @@ pub async fn action(app: AppHandle, kind: String, id: Value) -> Result<Value, St
                 .map_err(|e| e.to_string())??;
         }
         "minimize" => {
-            app.get_webview_window("dashboard")
-                .ok_or("Window unavailable")?
-                .minimize()
-                .map_err(|e| e.to_string())?;
+            let w = app
+                .get_webview_window("dashboard")
+                .ok_or("Window unavailable")?;
+            w.minimize().map_err(|e| e.to_string())?;
+            let _ = w.emit("oracle-dashboard-visible", false);
         }
         "maximize" => {
             let w = app
@@ -247,10 +311,11 @@ pub async fn action(app: AppHandle, kind: String, id: Value) -> Result<Value, St
         }
         "hide" => {
             state.view.lock().unwrap()["guideCapture"] = json!(false);
-            app.get_webview_window("dashboard")
-                .ok_or("Window unavailable")?
-                .hide()
-                .map_err(|e| e.to_string())?;
+            let w = app
+                .get_webview_window("dashboard")
+                .ok_or("Window unavailable")?;
+            w.hide().map_err(|e| e.to_string())?;
+            let _ = w.emit("oracle-dashboard-visible", false);
         }
         "quit" => app.exit(0),
         "dismiss-error" => state.view.lock().unwrap()["error"] = Value::Null,
@@ -305,7 +370,7 @@ pub async fn action(app: AppHandle, kind: String, id: Value) -> Result<Value, St
         }
         _ => return Err("Unknown action".into()),
     }
-    ready(state)
+    ready(state, None)
 }
 #[tauri::command]
 pub async fn guide_data(app: AppHandle, command: String, args: Value) -> Result<Value, String> {

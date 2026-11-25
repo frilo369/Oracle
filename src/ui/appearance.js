@@ -8,12 +8,15 @@
   const find = id => themes.find(theme => theme.id === id) || themes[0];
   const validColour = value => /^#[0-9a-f]{6}$/i.test(value || '');
   const page = document.documentElement;
-  let savedColour = defaultColour, previewColour = null, activeTheme = 'umbra';
+  let savedColour = defaultColour, previewColour = null, activeTheme = 'umbra', painted;
   const base = new URL('.', document.currentScript.src);
   const channel = typeof BroadcastChannel === 'function' ? new BroadcastChannel('umbra-appearance') : null;
   const mix = (colour, amount) => '#' + colour.slice(1).match(/../g).map(c => Math.round(parseInt(c,16)*(1-amount)+255*amount).toString(16).padStart(2,'0')).join('');
-  function paint() {
+  function paint(force = false) {
     const colour = previewColour || savedColour;
+    const key = `${activeTheme}:${colour}`;
+    if (!force && painted === key) return;
+    painted = key;
     page.style.setProperty('--accent', colour);
     page.style.setProperty('--silver', colour === defaultColour ? '#cabfb1' : mix(colour,.60));
     page.style.setProperty('--shine', colour === defaultColour ? '#fff3e7' : mix(colour,.92));
@@ -61,7 +64,7 @@
   let colour, design;
   try { colour = localStorage.getItem('umbra-asset-colour'); design = localStorage.getItem('umbra-interface-design');localStorage.removeItem('umbra-asset-opacity'); } catch {}
   apply(design, colour);
-  document.addEventListener('DOMContentLoaded', paint);
+  document.addEventListener('DOMContentLoaded', () => paint(true));
   window.addEventListener('storage', event => { if(event.key === 'umbra-asset-colour') { savedColour = validColour(event.newValue) ? event.newValue : defaultColour; paint(); } });
   window.addEventListener('pagehide', () => { if(previewColour) channel?.postMessage({preview:null}); });
 })();

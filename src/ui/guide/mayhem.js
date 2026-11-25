@@ -35,6 +35,7 @@ let currentChampion = Number(
   new URL(location.href).searchParams.get("champion")
 ), revision = 0, tooltipTarget = null;
 let tooltipTimer = 0, restoringTooltipFocus = false;
+let augmentGroups = [];
 const cachedResponses = /* @__PURE__ */ new Map();
 const chosenSkills = new Map();
 const escape = (value) => String(value ?? "").replace(
@@ -95,22 +96,34 @@ function fillChampions() {
   select.disabled = document.body.classList.contains("refreshing");
   select.value = String(currentChampion);
 }
-function renderAugments() {
+function renderAugments(rebuild = false) {
   if (!build) return;
-  const groups = groupMayhemAugments(build.augments, catalogue, search.value);
-  element("#augment-count").textContent = String(
-    groups.reduce((sum, group) => sum + group.rows.length, 0)
-  );
-  for (const group of groups) {
+  if (rebuild) augmentGroups = groupMayhemAugments(build.augments, catalogue).map(group => {
     const key = group.rarity.toLowerCase();
-    element(`#${key}-count`).textContent = String(group.rows.length);
     const list = element(`#${key}-rows`), scroll = list.scrollTop;
     list.innerHTML = group.rows.map((row) => {
       const game = entry("augments", row.id);
       return `<article class="augment-row" aria-label="${escape(game.name)}"><span class="augment-art">${art(game, "augments")}</span><span class="entry-name">${escape(game.name)}</span><div class="augment-metrics"><span class="grade grade-${escape(row.grade)}" title="Tencent grade ${escape(row.grade || "unavailable")}">${escape(row.grade || "\u2014")}</span><span class="augment-pick" title="Pick rate">${formatPercent(row.pickRate)}</span></div></article>`;
-    }).join("") || '<p class="empty">No matching recommendations.</p>';
+    }).join("") + '<p class="empty" hidden>No matching recommendations.</p>';
     list.scrollTop = scroll;
+    return {count: element(`#${key}-count`), empty: list.querySelector('.empty'), rows: Array.from(list.querySelectorAll('.augment-row'), node => ({node, name: node.getAttribute('aria-label').toLocaleLowerCase('en')}))};
+  });
+  // Keep the same picture nodes while typing: filtering must not restart artwork
+  // fallback requests, image decoding or the scrollable list's entire layout.
+  const query = search.value.trim().toLocaleLowerCase('en');
+  let total = 0;
+  for (const group of augmentGroups) {
+    let count = 0;
+    for (const {node, name} of group.rows) {
+      const hidden = !name.includes(query);
+      if (node.hidden !== hidden) node.hidden = hidden;
+      if (!hidden) count++;
+    }
+    group.count.textContent = String(count);
+    group.empty.hidden = count > 0;
+    total += count;
   }
+  element("#augment-count").textContent = String(total);
 }
 function itemRow(row, sectionId, rank) {
   if (sectionId === "boots" && row.itemIds.length === 1) {
@@ -219,7 +232,7 @@ function renderResponse(response, checking = false) {
   skillSelect.disabled = !build.skillOrders.length;
   const previousSkill = chosenSkills.get(currentChampion);
   if (build.skillOrders.some(row => row.priority.join('-') === previousSkill)) skillSelect.value = previousSkill;
-  renderAugments();
+  renderAugments(true);
   renderEquipment();
   renderSkills();
   element("#skills-strip").hidden = false;
@@ -378,7 +391,7 @@ element("#retry").addEventListener(
   "click",
   () => void loadChampion(currentChampion, true)
 );
-search.addEventListener("input", renderAugments);
+search.addEventListener("input", () => renderAugments());
 element("#equipment").addEventListener("click", (event) => {
   const button = event.target.closest(
     "button[data-sort-section]"
