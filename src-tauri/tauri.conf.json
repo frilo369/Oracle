@@ -1,6 +1,6 @@
 {
   "productName": "Oracle",
-  "version": "2.3.0",
+  "version": "2.4.0",
   "identifier": "com.frilo369.oracle",
   "build": { "frontendDist": "../src/ui" },
   "app": {

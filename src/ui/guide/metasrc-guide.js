@@ -677,10 +677,46 @@ const metasrcGuide = function metasrcGuide() {
       observer,
       challengeObserver,
       updateTimer,
-      pending;
+      pending,
+      selectedBuild;
     // Models already read from the source in this document, by build URL. Switching back to a
     // build shows it at once while the source catches up. Kept in memory only.
     const loaded = new Map();
+    // Keep a few detached standard layouts, including their decoded artwork and tooltip
+    // identities. Revisiting a build should move its existing nodes, not parse all its HTML.
+    const standardViews = new Map();
+    const arenaViews = new Map();
+    let arenaView, augmentPanelTemplate;
+    const markup = new WeakMap();
+    function html(node, value) {
+      if (markup.get(node) === value) return;
+      node.innerHTML = value;
+      markup.set(node, value);
+    }
+    function content(node, value) {
+      if (node.textContent !== value) node.textContent = value;
+    }
+    function attribute(node, name, value) {
+      if (node.getAttribute(name) !== value) node.setAttribute(name, value);
+    }
+    function remember(fresh) {
+      loaded.delete(fresh.url);
+      loaded.set(fresh.url, { model: fresh, at: Date.now() });
+      while (loaded.size > 20) loaded.delete(loaded.keys().next().value);
+    }
+    function prepared(url) {
+      const entry = loaded.get(url);
+      const age = entry ? Date.now() - entry.at : -1;
+      return entry && entry.model.patch === model.patch && age >= 0 && age < MAX_AGE
+        ? entry.model
+        : null;
+    }
+    function changeContext(next) {
+      if (model?.url === next.url && model.patch === next.patch) return;
+      contextAbort.abort();
+      contextAbort = new AbortController();
+      tipRequests.clear();
+    }
     const challenged = () => doc.documentElement?.classList.contains('dynamic-challenge');
     function markChallengePath() {
       const widget = doc.getElementById('hyper-dynamic-turnstile');
@@ -690,7 +726,11 @@ const metasrcGuide = function metasrcGuide() {
         node.setAttribute('data-umbra-challenge-path', '');
     }
     function changeFailed(message) {
+      const showingSaved = pending?.kind === 'build' && model?.url === pending.key;
       endChange();
+      // A failed background refresh must not undo an immediately displayed cached choice.
+      if (showingSaved) return notice('The selected build is shown from this session. Its source could not be refreshed.');
+      selectedBuild = null;
       // A saved build may be on screen while the source still shows the previous one.
       update();
       notice(message);
@@ -788,6 +828,19 @@ const metasrcGuide = function metasrcGuide() {
       return `<div class="meta-rune-pages" role="group" aria-label="Rune alternatives">${runes.pages.map((page) => `<button type="button" data-rune-page="${escape(page.key)}" aria-pressed="${page.key === runes.selected}" aria-label="${escape(page.items.map((i) => i.name).join(' / '))}, ${format(page.winRate)} win, ${format(page.pickRate)} pick" title="${escape(page.items.map((i) => i.name).join(' / '))}"><span>${page.items.map((item) => image(item, false)).join('')}</span><small>${format(page.winRate)} <em>win</em></small><small>${format(page.pickRate)} <em>pick</em></small></button>`).join('')}</div><div class="meta-rune-line primary" aria-label="Primary runes">${runes.primary.map((item) => image(item)).join('')}</div><div class="meta-rune-line secondary" aria-label="Secondary runes and stat shards">${runes.secondary.map((item) => image(item)).join('')}<span class="meta-rune-divider"></span>${runes.shards.map((item) => image(item)).join('')}</div>`;
     }
     function renderStandard() {
+      const signature = JSON.stringify([
+        model.runes, model.skill, model.spells, model.starting, model.trinkets,
+        model.core, model.categories, model.boots, model.path,
+      ]);
+      const saved = standardViews.get(model.url);
+      if (saved?.signature === signature) {
+        for (const [key, item] of saved.tips) tips.set(key, item);
+        const container = q('#guide-content');
+        if (container.firstElementChild !== saved.node) container.replaceChildren(saved.node);
+        standardViews.delete(model.url);
+        standardViews.set(model.url, saved);
+        return;
+      }
       const other = model.categories.find((c) => c.id === 'other')?.rows || [];
       const trinketIds = new Set(['item-3340', 'item-3363', 'item-3364']);
       const trinkets = model.trinkets.length
@@ -818,11 +871,16 @@ const metasrcGuide = function metasrcGuide() {
       // Three rows of plain cards: setup, build, then per-slot options.
       q('#guide-content').innerHTML =
         `<div class="meta-standard"><div class="meta-row meta-row-top">${card('Runes', runeView(), 'meta-runes')}${card('Skill Order', skillView(), 'meta-skills')}<div class="meta-essentials">${card('Summoner Spells', spells, 'meta-spells')}${card('Starting Items', tiles(starting), 'meta-starting')}</div></div><div class="meta-row meta-row-build">${card('Core Build', tiles(model.core), 'meta-core')}${laterItems.length ? card('Later Items', tiles(laterItems), 'meta-later') : ''}${card('Item Build Order', pathView(), 'meta-path')}</div><div class="meta-row meta-options">${options.map((c) => card(c.title, tiles(c.rows), 'meta-option', c.rows.length)).join('')}${card('Boots', tiles(model.boots), 'meta-option meta-boots', model.boots.length)}${trinkets.length ? card('Trinkets', tiles(trinkets), 'meta-option', trinkets.length) : ''}</div></div>`;
+      standardViews.delete(model.url);
+      standardViews.set(model.url, {
+        signature, node: q('#guide-content').firstElementChild, tips: new Map(tips),
+      });
+      while (standardViews.size > 6) standardViews.delete(standardViews.keys().next().value);
     }
     function arenaTemplate() {
       // Left: the same three augment lists as Mayhem. Right: item cards stacked
       // in one column, with the prismatic list taking the remaining height.
-      const panel = q('.augments-panel');
+      const panel = augmentPanelTemplate.cloneNode(true);
       q('#guide-content').innerHTML =
         '<div class="meta-arena-layout"><div id="meta-augment-slot"></div><div class="meta-arena-side"><div class="panel-heading"><h2>' +
         mark('items') +
@@ -840,18 +898,21 @@ const metasrcGuide = function metasrcGuide() {
           (a, b) =>
             Number(a.title.match(/\d+/)?.[0] || 100) - Number(b.title.match(/\d+/)?.[0] || 100),
         );
-      q('#meta-recommended-rounds').innerHTML =
+      html(q('#meta-recommended-rounds'),
         model.core
           .map(
             (row) =>
               `<div class="meta-recommended-round"><span>${escape(row.label)}</span>${tiles([row])}</div>`,
           )
-          .join('') || '<p class="empty">No round recommendations reported.</p>';
-      q('#meta-round-options').innerHTML =
+          .join('') || '<p class="empty">No round recommendations reported.</p>');
+      html(q('#meta-round-options'),
         choices.map((c) => card(c.title, tiles(c.rows), 'meta-option', c.rows.length)).join('') +
-        card('Boots', tiles(model.boots), 'meta-option', model.boots.length);
+        card('Boots', tiles(model.boots), 'meta-option', model.boots.length));
     }
-    let prismaticSort = 'tier';
+    let prismaticSort = 'tier', augmentSignature, prismaticSignature;
+    function registerTips(rows) {
+      for (const item of rows) tips.set(`${item.key}|${item.tooltip || item.icon}`, item);
+    }
     // Rate pagination must not replace or move an item being read. Reconcile
     // by source identity, updating only metrics on existing rows.
     function syncRecommendations(list, rows, prismatic, background) {
@@ -896,13 +957,13 @@ const metasrcGuide = function metasrcGuide() {
             ? `${image(item)}<span class="meta-item-label"></span><span class="meta-prismatic-grade grade"></span><small class="recommendation-rate"></small>`
             : `<span class="augment-art">${image(item)}</span><span class="entry-name"></span><div class="augment-metrics"><span class="grade"></span><span class="augment-pick recommendation-rate" title="Pick rate"></span></div>`;
         }
-        node.setAttribute('aria-label', item.name);
+        attribute(node, 'aria-label', item.name);
         const target = node.querySelector('[data-tip]');
         const key = `${item.key}|${item.tooltip || item.icon}`;
         tips.set(key, item);
         if (target) {
-          target.dataset.tip = key;
-          target.setAttribute('aria-label', item.name);
+          attribute(target, 'data-tip', key);
+          attribute(target, 'aria-label', item.name);
           const src = assetURL(item.icon);
           let picture = target.querySelector('img');
           if (src && picture?.getAttribute('src') !== src) {
@@ -919,19 +980,19 @@ const metasrcGuide = function metasrcGuide() {
             picture?.remove();
             target.classList.add('art-failed');
           }
-          target.querySelector('.art-fallback').textContent = item.name
+          content(target.querySelector('.art-fallback'), item.name
             .split(/\s+/)
             .slice(0, 2)
             .map((word) => word[0])
-            .join('');
+            .join(''));
         }
         const name = node.querySelector(prismatic ? '.meta-item-label' : '.entry-name');
-        if (name) name.textContent = prismatic ? breakable(item.name) : item.name;
+        if (name) content(name, prismatic ? breakable(item.name) : item.name);
         const grade = node.querySelector(prismatic ? '.meta-prismatic-grade' : '.grade');
-        grade.textContent = item.grade || '—';
+        content(grade, item.grade || '—');
         // S+ and S share the gold badge; the letter decides the colour.
-        grade.className = `${prismatic ? 'meta-prismatic-grade ' : ''}grade${/^[SABCD]/.test(item.grade || '') ? ` grade-${item.grade[0]}` : ''}`;
-        node.querySelector('.recommendation-rate').textContent = format(item.pickRate);
+        attribute(grade, 'class', `${prismatic ? 'meta-prismatic-grade ' : ''}grade${/^[SABCD]/.test(item.grade || '') ? ` grade-${item.grade[0]}` : ''}`);
+        content(node.querySelector('.recommendation-rate'), format(item.pickRate));
         if (node !== cursor) list.insertBefore(node, cursor);
         cursor = node.nextElementSibling;
       }
@@ -943,8 +1004,14 @@ const metasrcGuide = function metasrcGuide() {
       }
     }
     function renderPrismatics(background = false) {
-      const list = q('#meta-prismatic-items'),
-        scroll = list.scrollTop;
+      const list = q('#meta-prismatic-items');
+      const signature = JSON.stringify([model.prismatics, prismaticNeedle, prismaticSort]);
+      if (signature === prismaticSignature && !list.dataset.pendingOrder) {
+        registerTips(model.prismatics);
+        return;
+      }
+      prismaticSignature = signature;
+      const scroll = list.scrollTop;
       const rows = model.prismatics.filter((item) =>
         item.name.toLowerCase().includes(prismaticNeedle.trim().toLowerCase()),
       );
@@ -958,6 +1025,12 @@ const metasrcGuide = function metasrcGuide() {
         button.setAttribute('aria-pressed', String(button.dataset.prismaticSort === prismaticSort));
     }
     function renderAugments(background = false) {
+      const signature = JSON.stringify([model.augments, needle]);
+      if (signature === augmentSignature && !root.querySelector('.augment-list[data-pending-order]')) {
+        registerTips(model.augments);
+        return;
+      }
+      augmentSignature = signature;
       const rows = sorted(
         model.augments.filter((a) => a.name.toLowerCase().includes(needle.trim().toLowerCase())),
         'tier',
@@ -1007,59 +1080,79 @@ const metasrcGuide = function metasrcGuide() {
     function render() {
       if (!root) return;
       if (!model) return placeholder();
+      if (arenaView) {
+        arenaView.augmentSignature = augmentSignature;
+        arenaView.prismaticSignature = prismaticSignature;
+      }
       clearTip();
       tips.clear();
       const modeName = { arena: 'ARENA', aram: 'ARAM', rift: 'RANKED' }[model.mode];
-      host.className = `meta-guide mode-${model.mode}${itemNames ? ' named-items' : ''}`;
-      q('#meta-item-names').setAttribute('aria-pressed', String(itemNames));
-      q('#champion-name').textContent = model.champion.name;
-      q('#champion-icon').src = model.champion.icon;
+      attribute(host, 'class', `meta-guide mode-${model.mode}${itemNames ? ' named-items' : ''}`);
+      attribute(q('#meta-item-names'), 'aria-pressed', String(itemNames));
+      content(q('#champion-name'), model.champion.name);
+      attribute(q('#champion-icon'), 'src', model.champion.icon);
       q('#champion-icon').classList.remove('missing-art');
       q('.meta-portrait').classList.remove('art-failed');
-      q('.meta-portrait .art-fallback').textContent = model.champion.name
+      content(q('.meta-portrait .art-fallback'), model.champion.name
         .split(/\s+/)
         .map((word) => word[0])
         .slice(0, 2)
-        .join('');
-      q('#meta-mode-name').textContent = modeName;
-      q('#meta-mode-name').nextSibling.textContent =
-        model.mode === 'arena' ? ' · AUGMENTS · SKILLS · ITEMS' : ' · RUNES · SKILLS · ITEMS';
-      q('#data-date').textContent = `Patch ${model.patch}`;
-      doc.title = `${model.champion.name} · ${modeName} · Oracle`;
+        .join(''));
+      content(q('#meta-mode-name'), modeName);
+      content(q('#meta-mode-name').nextSibling,
+        model.mode === 'arena' ? ' · AUGMENTS · SKILLS · ITEMS' : ' · RUNES · SKILLS · ITEMS');
+      content(q('#data-date'), `Patch ${model.patch}`);
+      const title = `${model.champion.name} · ${modeName} · Oracle`;
+      if (doc.title !== title) doc.title = title;
       const wanted =
         model.mode === 'arena' ? ['Top 3 %', 'Pick %', 'Placement'] : ['Win %', 'Pick %', 'Tier'];
-      q('#champion-stats').innerHTML = wanted
+      html(q('#champion-stats'), wanted
         .map((key) => model.stats.find((s) => s.label === key))
         .filter(Boolean)
         .map(
           (s) =>
             `<div class="stat"><strong>${escape(s.value)}</strong><span>${escape({ 'Top 3 %': 'Top 3 rate', 'Pick %': 'Pick rate', 'Win %': 'Win rate', Placement: 'Avg. placement' }[s.label] || s.label)}</span></div>`,
         )
-        .join('');
+        .join(''));
       const select = q('#champion-select');
-      select.innerHTML = (options.champions || [])
+      html(select, (options.champions || [])
         .map(
           (c) =>
             `<option value="${escape(c.slug)}"${c.slug === model.slug ? ' selected' : ''}>${escape(c.name)}</option>`,
         )
-        .join('');
+        .join(''));
       select.disabled = !select.options.length;
-      q('#meta-build-styles').innerHTML = model.styles
+      html(q('#meta-build-styles'), model.styles
         .map(
           (style) =>
-            `<button type="button" data-build-style="${escape(style.url)}" aria-pressed="${style.selected}" aria-label="${escape(style.label)} build" title="${escape(style.label)} build">${style.items
+            `<button type="button" data-build-style="${escape(style.url)}" aria-pressed="false" aria-label="${escape(style.label)} build" title="${escape(style.label)} build">${style.items
               .slice(-1)
               .map((item) => image(item, false))
               .join(
                 '',
               )}${style.key === 'all' ? '<span aria-hidden="true">★</span>' : `<small>${escape(style.label)}</small>`}</button>`,
         )
-        .join('');
+        .join(''));
+      for (const button of root.querySelectorAll('[data-build-style]'))
+        attribute(button, 'aria-pressed', String(button.dataset.buildStyle === model.url));
       q('#meta-build-styles').hidden = !model.styles.length;
       if (model.mode === 'arena') {
-        q('#meta-arena-skills').innerHTML =
-          `<span class="skills-label">${mark('skills')}Skills</span><strong class="skill-priority">${model.skill.priority.join(' › ')}</strong><div class="skill-upgrades" tabindex="0" role="region" aria-label="Reported skill upgrades">${model.skill.order.map((key, index) => `<div class="skill-upgrade" aria-label="Level ${index + 1}, ${key || 'not reported'}"><small>${index + 1}</small><span class="skill-key skill-${key || 'unknown'}">${key || '—'}</span></div>`).join('')}</div>`;
-        if (!q('.meta-arena-layout')) arenaTemplate();
+        html(q('#meta-arena-skills'),
+          `<span class="skills-label">${mark('skills')}Skills</span><strong class="skill-priority">${model.skill.priority.join(' › ')}</strong><div class="skill-upgrades" tabindex="0" role="region" aria-label="Reported skill upgrades">${model.skill.order.map((key, index) => `<div class="skill-upgrade" aria-label="Level ${index + 1}, ${key || 'not reported'}"><small>${index + 1}</small><span class="skill-key skill-${key || 'unknown'}">${key || '—'}</span></div>`).join('')}</div>`);
+        let view = arenaViews.get(model.url);
+        if (!view) {
+          arenaTemplate();
+          view = { node: q('#guide-content').firstElementChild };
+        } else if (q('#guide-content').firstElementChild !== view.node) {
+          q('#guide-content').replaceChildren(view.node);
+        }
+        arenaViews.delete(model.url);
+        arenaViews.set(model.url, view);
+        while (arenaViews.size > 3) arenaViews.delete(arenaViews.keys().next().value);
+        arenaView = view;
+        augmentSignature = view.augmentSignature;
+        prismaticSignature = view.prismaticSignature;
+        q('#augment-search').value = needle;
         q('#meta-prismatic-search').value = prismaticNeedle;
         renderAugments();
         renderEquipment();
@@ -1069,8 +1162,8 @@ const metasrcGuide = function metasrcGuide() {
       q('#loading').hidden = true;
       q('#error').hidden = true;
       q('#guide-content').hidden = false;
-      q('footer').innerHTML =
-        `<span>MetaSRC · Patch ${escape(model.patch)} · ${escape(model.stats.find((s) => s.label === 'Games')?.value || '')} games</span><span>${model.mode === 'arena' ? 'Champion/skills: top 3 · Items: buy rate · Augments/prismatics: tier / pick rate' : 'Items: win / buy · Runes & spells: win / pick'}</span>`;
+      html(q('footer'),
+        `<span>MetaSRC · Patch ${escape(model.patch)} · ${escape(model.stats.find((s) => s.label === 'Games')?.value || '')} games</span><span>${model.mode === 'arena' ? 'Champion/skills: top 3 · Items: buy rate · Augments/prismatics: tier / pick rate' : 'Items: win / buy · Runes & spells: win / pick'}</span>`);
     }
     function notice(value, force = false) {
       if (!root) return;
@@ -1081,7 +1174,7 @@ const metasrcGuide = function metasrcGuide() {
     function busyControls() {
       if (!root) return;
       for (const button of root.querySelectorAll('[data-build-style],[data-rune-page]')) {
-        button.setAttribute(
+        attribute(button,
           'aria-busy',
           String(
             !!pending &&
@@ -1099,7 +1192,13 @@ const metasrcGuide = function metasrcGuide() {
     }
     function beginChange(kind, key, label, node) {
       if (pending?.kind === kind && pending.key === key) return false;
-      if (pending) clearTimeout(pending.timer);
+      const previous = pending;
+      if (previous) clearTimeout(previous.timer);
+      pending = null;
+      // Cancel superseded user selections through HTMX's own abort event, releasing its
+      // request queue. Never interfere with the provider's visible human check.
+      if (previous?.node?.isConnected && !challenged())
+        previous.node.dispatchEvent(new win.CustomEvent('htmx:abort', { bubbles: true }));
       const request = {
         kind,
         key,
@@ -1183,6 +1282,7 @@ const metasrcGuide = function metasrcGuide() {
       if (!body) throw Error('The guide template is unavailable');
       const style = options.style.replace(/:root((?:\[data-(?:theme|glass)="[^"]+"\])+)/g, ':host-context($1)').replace(/:root|\bhtml\b|\bbody\b/g, ':host');
       root.innerHTML = `<style>${style}\n:host{box-sizing:border-box;position:fixed!important;inset:0!important;z-index:2147483646!important;isolation:isolate;text-align:left;}[hidden]{display:none!important}</style>${body.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '')}`;
+      augmentPanelTemplate = q('.augments-panel').cloneNode(true);
 
       // Same banner as the Mayhem page: champion | skills | rates | actions.
       q('.toolbar').outerHTML =
@@ -1217,19 +1317,30 @@ const metasrcGuide = function metasrcGuide() {
           return;
         } else if (button.dataset.buildStyle) {
           const style = model.styles.find((row) => row.url === button.dataset.buildStyle);
-          if (!style || (!pending && style.selected && style.url === model.url)) return;
+          if (!style) return;
           const header = doc.querySelector('#shell-header');
           const liveStyle =
             header && readStyles(header, currentHref()).find((row) => row.url === style.url);
           const node = doc.getElementById(liveStyle?.id || style.id);
+          if (!pending && style.url === model.url && liveStyle?.selected &&
+              sourceURL(currentHref())?.url === style.url) return;
           if (!beginChange('build', style.url, `${style.label} build`, node)) return;
-          const ready = loaded.get(style.url);
-          if (ready && ready.patch === model.patch) {
+          selectedBuild = style.url;
+          const ready = prepared(style.url);
+          if (ready) {
+            const restoreFocus = root.activeElement === button;
+            changeContext(ready);
             model = ready;
             render();
             busyControls();
             notice('', true);
-            root.querySelector(`[data-build-style="${CSS.escape(style.url)}"]`)?.focus();
+            if (restoreFocus && !button.isConnected)
+              root.querySelector(`[data-build-style="${CSS.escape(style.url)}"]`)?.focus({ preventScroll: true });
+            if (model.mode === 'arena' && !updating) void completeAugments();
+          }
+          if (ready && liveStyle?.selected && sourceURL(currentHref())?.url === style.url) {
+            endChange();
+            return;
           }
           // Use the site's real HTMX link. Full document GETs initially contain
           // Recommended data and can mount before the source finishes hydrating.
@@ -1247,6 +1358,14 @@ const metasrcGuide = function metasrcGuide() {
             );
           }
         } else if (button.dataset.runePage) {
+          // A cached build can be visible before its source swap. Apply rune choices only
+          // after that swap so a click never changes the previous build's rune widget.
+          if (!pending && sourceURL(currentHref())?.url !== model.url)
+            root.querySelector(`[data-build-style="${CSS.escape(model.url)}"]`)?.click();
+          if (pending?.kind === 'build') {
+            pending.runeKey = button.dataset.runePage;
+            return;
+          }
           const page = model.runes?.pages.find((p) => p.key === button.dataset.runePage),
             node = page && doc.getElementById(page.id);
           if (node) {
@@ -1411,6 +1530,9 @@ const metasrcGuide = function metasrcGuide() {
     }
     function update() {
       if (abort.signal.aborted) return;
+      // Older HTMX requests can finish after the latest click (or even after its response).
+      // Keep that latest choice until another click or an explicit history navigation.
+      if (selectedBuild && sourceURL(currentHref())?.url !== selectedBuild) return;
       let fresh;
       try {
         fresh = read(doc, currentHref());
@@ -1425,7 +1547,7 @@ const metasrcGuide = function metasrcGuide() {
         completed = pending;
         endChange();
       }
-      const cached = readCache(storage, fresh.url);
+      const cached = prepared(fresh.url) || readCache(storage, fresh.url);
       // Keep already loaded page rates while a rune widget changes in the source.
       const previous =
         model?.url === fresh.url && model.patch === fresh.patch
@@ -1446,28 +1568,33 @@ const metasrcGuide = function metasrcGuide() {
         fresh.rateCheckedAt = previous.rateCheckedAt || 0;
       }
       const signature = JSON.stringify(fresh);
-      if (model && JSON.stringify(model) === signature) return;
-      if (!model || model.url !== fresh.url || model.patch !== fresh.patch) {
-        contextAbort.abort();
-        contextAbort = new AbortController();
-        tipRequests.clear();
+      if (model && JSON.stringify(model) === signature) {
+        remember(model);
+        finishChange(completed);
+        return;
       }
+      changeContext(fresh);
       model = fresh;
-      loaded.set(model.url, model);
+      remember(model);
       if (!host) mount();
       render();
       markChallengePath();
-      if (completed)
+      finishChange(completed);
+      saveCache(storage, model);
+      notice('');
+      if (model.mode === 'arena' && !updating) void completeAugments();
+    }
+    function finishChange(completed) {
+      if (completed?.runeKey) {
+        root.querySelector(`[data-rune-page="${CSS.escape(completed.runeKey)}"]`)?.click();
+      } else if (completed)
         [...root.querySelectorAll('[data-build-style],[data-rune-page]')]
           .find(
             (button) =>
               button.dataset.buildStyle === completed.key ||
               button.dataset.runePage === completed.key,
           )
-          ?.focus();
-      saveCache(storage, model);
-      notice('');
-      if (model.mode === 'arena' && !updating) void completeAugments();
+          ?.focus({ preventScroll: true });
     }
     function start() {
       update();
@@ -1501,7 +1628,8 @@ const metasrcGuide = function metasrcGuide() {
           pending.changed = true;
         clearTimeout(updateTimer);
         // A requested build arrives as one swap: show it at once. Otherwise coalesce bursts.
-        updateTimer = setTimeout(update, pending ? 16 : 150);
+        if (pending) update();
+        else updateTimer = setTimeout(update, 150);
       });
       observer.observe(sourceRoot, {
         childList: true,
@@ -1509,7 +1637,11 @@ const metasrcGuide = function metasrcGuide() {
         attributes: true,
         attributeFilter: ['data-tab-current-value'],
       });
-      win.addEventListener('popstate', update);
+      win.addEventListener('popstate', () => {
+        selectedBuild = null;
+        endChange();
+        update();
+      });
       let challengeShown = false;
       challengeObserver = new win.MutationObserver(() => {
         markChallengePath();
@@ -1521,8 +1653,13 @@ const metasrcGuide = function metasrcGuide() {
         else notice('');
       });
       challengeObserver.observe(doc.documentElement, { attributes: true, attributeFilter: ['class'] });
+      doc.addEventListener('htmx:beforeRequest', (event) => {
+        if (pending && (event.target === pending.node || event.detail?.elt === pending.node))
+          pending.xhr = event.detail?.xhr;
+      });
       for (const type of ['htmx:responseError', 'htmx:sendError', 'htmx:timeout'])
         doc.addEventListener(type, (event) => {
+          if (pending?.xhr && event.detail?.xhr && pending.xhr !== event.detail.xhr) return;
           if (pending && (event.target === pending.node || event.detail?.elt === pending.node))
             changeFailed(
               'The source could not load that selection. Previous recommendations are still shown.',

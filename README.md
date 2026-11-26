@@ -22,4 +22,6 @@ Version 2.0 fixes Windows installed-path recognition so startup checks and **Che
 
 The overlay remains experimental. Current source labels it **Settings → Beta - Overlay** and disables it by default. Development of the Game Bar fullscreen companion is paused at the owner's request; fullscreen visibility has not passed acceptance. The last delivered 2.2 beta used a desktop overlay for Mayhem. See `docs/augment-overlay.md` for that build and `docs/overlay-gamebar-2.3.md` for the paused experiment and its limitations.
 
+Version 2.4 speeds up the build buttons at the top of MetaSRC guides by reusing loaded layouts and artwork, cancelling superseded selections, and keeping the latest choice when responses arrive out of order. Cached builds appear immediately while their source refreshes; first-time loads still require MetaSRC. Run `node scripts/check-build-switches.mjs` for headless regression and timing checks. See `docs/validation-2.4.md` for measurements and limits.
+
 Independent project by FrYiLo; not affiliated with Riot Games. League artwork belongs to Riot Games. Provider pages and availability are controlled by their owners. See `docs/ideas.md` for proposed future features and `docs/provenance.md` for reused source.
